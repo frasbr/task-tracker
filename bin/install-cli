@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+#
+# install-cli — install `tasks` as a standalone program on your PATH.
+#
+# The bundle is a single self-contained file: 35 KB, no dependencies, nothing but Node
+# builtins. Installing it means copying that one file, which is what makes the installed
+# program independent of this checkout — move or delete the source and `tasks` keeps working.
+#
+# The trade is that a copy can go stale. `tasks-init` checks for that and tells you.
+#
+#   ./bin/install-cli                 → ~/.local/bin/tasks
+#   ./bin/install-cli --to ~/bin      → ~/bin/tasks
+#   TASKS_BIN_DIR=/opt/bin ./bin/install-cli
+
+set -euo pipefail
+
+resolve_dir() {
+  local source="${BASH_SOURCE[0]}" dir
+  while [ -L "$source" ]; do
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    [[ $source != /* ]] && source="$dir/$source"
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+REPO_ROOT="$(dirname "$(resolve_dir)")"
+BUILT="$REPO_ROOT/packages/cli/dist/tasks.js"
+BIN_DIR="${TASKS_BIN_DIR:-$HOME/.local/bin}"
+
+if [ -t 1 ]; then
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET=$'\033[0m'
+else
+  BOLD=''; DIM=''; GREEN=''; YELLOW=''; RESET=''
+fi
+
+# npm prepends every ancestor node_modules/.bin to PATH when it runs a script. That makes
+# `tasks` resolve to this workspace's dev build rather than whatever is actually installed,
+# which would report a shadowing problem that does not exist in a normal shell. Strip those
+# entries so the check reflects the PATH you actually type at.
+shell_path() {
+  printf '%s' "$PATH" | tr ':' '\n' | grep -v '/node_modules/\.bin$' | paste -sd: -
+}
+
+find_tasks() {
+  PATH="$(shell_path)" command -v tasks 2>/dev/null || true
+}
+
+step() { printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
+note() { printf '    %s%s%s\n' "$DIM" "$1" "$RESET"; }
+warn() { printf '  %s!%s %s\n' "$YELLOW" "$RESET" "$1"; }
+die()  { printf '\n  %sFailed:%s %s\n\n' "$YELLOW" "$RESET" "$1" >&2; exit 1; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --to) BIN_DIR="${2:?--to needs a directory}"; shift 2 ;;
+    -h|--help)
+      printf '%sinstall-cli%s — install `tasks` on your PATH\n\n  install-cli [--to <dir>]\n\n  Default: %s\n' \
+        "$BOLD" "$RESET" "$HOME/.local/bin"
+      exit 0 ;;
+    *) die "unknown flag '$1'" ;;
+  esac
+done
+
+TARGET="$BIN_DIR/tasks"
+
+printf '\n%sinstall-cli%s\n\n' "$BOLD" "$RESET"
+
+command -v node >/dev/null 2>&1 || die "node is not on your PATH. Task Tracker needs Node 22.18 or newer."
+
+( cd "$REPO_ROOT" && npm run build -w @task-tracker/cli ) >/dev/null 2>&1 \
+  || die "could not build the CLI. Run 'npm install' in $REPO_ROOT and try again."
+step "built the CLI"
+
+mkdir -p "$BIN_DIR"
+
+if [ -f "$TARGET" ] && cmp -s "$BUILT" "$TARGET"; then
+  step "already up to date at $TARGET"
+else
+  # Write beside the target and rename, so a `tasks` running right now is never
+  # replaced underneath itself.
+  temp="$TARGET.$$.tmp"
+  cp "$BUILT" "$temp"
+  chmod 755 "$temp"
+  mv -f "$temp" "$TARGET"
+  step "installed to $TARGET"
+  note "$(du -h "$TARGET" | cut -f1 | tr -d ' ') · self-contained · independent of this checkout"
+fi
+
+"$TARGET" --version >/dev/null 2>&1 || die "the installed binary does not run. Check that $BIN_DIR is writable."
+
+printf '\n'
+found="$(find_tasks)"
+if [ "$found" = "$TARGET" ]; then
+  step "'tasks' resolves to the copy just installed"
+elif [ -n "$found" ]; then
+  warn "'tasks' on your PATH is $found, not the copy just installed"
+  note "an earlier directory in PATH is shadowing $BIN_DIR"
+else
+  warn "$BIN_DIR is not on your PATH"
+  note "add it:  export PATH=\"$BIN_DIR:\$PATH\""
+fi
+
+printf '\n  %sDone.%s Set up a repo with:  tasks-init\n\n' "$BOLD" "$RESET"

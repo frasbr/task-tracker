@@ -1,0 +1,48 @@
+{
+  "name": "task-tracker-vscode",
+  "displayName": "Task Tracker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Kanban board for the project's task store, shared with your coding agents.",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=22.18"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onWebviewPanel:taskTracker.board"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "taskTracker.openBoard",
+        "title": "Task Tracker: Open Board"
+      }
+    ],
+    "configuration": {
+      "title": "Task Tracker",
+      "properties": {
+        "taskTracker.cliPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the `tasks` CLI. Leave empty to resolve from PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "package": "npx --yes @vscode/vsce package --no-dependencies --allow-missing-repository",
+    "test": "node --test \"src/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.28.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@task-tracker/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The tasks CLI \u2014 the only writer of the task store.",
+  "bin": {
+    "tasks": "./dist/tasks.js"
+  },
+  "dependencies": {
+    "@task-tracker/core": "*"
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import ./test-hooks.mjs --test \"src/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

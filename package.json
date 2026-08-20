@@ -1,0 +1,31 @@
+{
+  "name": "task-tracker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A per-project kanban board that coding agents and humans edit through one plain-text store.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "workspaces": [
+    "packages/core",
+    "packages/cli",
+    "packages/extension"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "install-cli": "bin/install-cli",
+    "install-extension": "bin/install-extension",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run typecheck && npm run test",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.6.0"
+  }
+}

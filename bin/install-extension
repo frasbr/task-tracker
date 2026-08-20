@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+#
+# install-extension — build, package and install the Task Tracker board into VSCode.
+#
+# Unlike the CLI, a VSCode extension is not a file you drop on your PATH: it has to be
+# packaged into a .vsix and handed to VSCode, which unpacks it into its own extensions
+# directory. That copy is independent of this checkout, the same as the installed CLI.
+#
+#   install-extension              build, package, install, and clean up the .vsix
+#   install-extension --status     what is installed, and whether it matches this checkout
+#   install-extension --uninstall  remove it
+#   install-extension --dev        symlink this checkout instead, for live development
+#
+# Set VSCODE_EXTENSIONS_DIR to install somewhere other than VSCode's default. Used by
+# the tests so they never touch a real editor.
+
+set -euo pipefail
+
+resolve_dir() {
+  local source="${BASH_SOURCE[0]}" dir
+  while [ -L "$source" ]; do
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    [[ $source != /* ]] && source="$dir/$source"
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+REPO_ROOT="$(dirname "$(resolve_dir)")"
+EXT_DIR="$REPO_ROOT/packages/extension"
+EXT_ID="local.task-tracker-vscode"
+BUILT="$EXT_DIR/out/extension.js"
+
+if [ -t 1 ]; then
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET=$'\033[0m'
+else
+  BOLD=''; DIM=''; GREEN=''; YELLOW=''; RESET=''
+fi
+
+# npm prepends every ancestor node_modules/.bin to PATH when it runs a script. That makes
+# `tasks` resolve to this workspace's dev build rather than whatever is actually installed,
+# which would report a shadowing problem that does not exist in a normal shell. Strip those
+# entries so the check reflects the PATH you actually type at.
+shell_path() {
+  printf '%s' "$PATH" | tr ':' '\n' | grep -v '/node_modules/\.bin$' | paste -sd: -
+}
+
+find_tasks() {
+  PATH="$(shell_path)" command -v tasks 2>/dev/null || true
+}
+
+step() { printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
+note() { printf '    %s%s%s\n' "$DIM" "$1" "$RESET"; }
+warn() { printf '  %s!%s %s\n' "$YELLOW" "$RESET" "$1"; }
+die()  { printf '\n  %sFailed:%s %s\n\n' "$YELLOW" "$RESET" "$1" >&2; exit 1; }
+
+# `code` writes a deprecation warning to stderr on every invocation; it is not ours.
+code_cli() {
+  if [ -n "${VSCODE_EXTENSIONS_DIR:-}" ]; then
+    code --extensions-dir "$VSCODE_EXTENSIONS_DIR" "$@" 2>/dev/null
+  else
+    code "$@" 2>/dev/null
+  fi
+}
+
+installed_dir() {
+  local base="${VSCODE_EXTENSIONS_DIR:-$HOME/.vscode/extensions}"
+  find "$base" -maxdepth 1 -name "$EXT_ID-*" 2>/dev/null | head -1
+}
+
+mode=install
+for argument in "$@"; do
+  case "$argument" in
+    --status)    mode=status ;;
+    --uninstall) mode=uninstall ;;
+    --dev)       mode=dev ;;
+    -h|--help)
+      printf '%sinstall-extension%s — install the Task Tracker board into VSCode\n\n  install-extension [--status | --uninstall | --dev]\n' "$BOLD" "$RESET"
+      exit 0 ;;
+    *) die "unknown flag '$argument'" ;;
+  esac
+done
+
+printf '\n%sinstall-extension%s\n\n' "$BOLD" "$RESET"
+command -v code >/dev/null 2>&1 || die "the 'code' command is not on your PATH. In VSCode: Command Palette → 'Shell Command: Install code command in PATH'."
+
+# ---------------------------------------------------------------- status
+
+if [ "$mode" = status ]; then
+  version="$(code_cli --list-extensions --show-versions | grep "^$EXT_ID@" || true)"
+  if [ -z "$version" ]; then
+    warn "not installed"
+    note "install it with:  $REPO_ROOT/bin/install-extension"
+  else
+    step "installed: $version"
+    where="$(installed_dir)"
+    if [ -L "$where" ]; then
+      step "symlinked to this checkout — always current"
+    elif [ -n "$where" ] && [ -f "$BUILT" ]; then
+      if cmp -s "$BUILT" "$where/out/extension.js"; then
+        step "matches this checkout"
+      else
+        warn "differs from this checkout — reinstall to update"
+      fi
+    fi
+  fi
+  printf '\n'
+  exit 0
+fi
+
+# ---------------------------------------------------------------- uninstall
+
+if [ "$mode" = uninstall ]; then
+  where="$(installed_dir)"
+  if [ -L "$where" ]; then
+    rm "$where"
+    step "removed the development symlink"
+  else
+    code_cli --uninstall-extension "$EXT_ID" >/dev/null || die "could not uninstall $EXT_ID"
+    step "uninstalled $EXT_ID"
+  fi
+  printf '\n  Reload your VSCode windows to finish.\n\n'
+  exit 0
+fi
+
+# ---------------------------------------------------------------- build
+
+( cd "$REPO_ROOT" && npm run build -w task-tracker-vscode ) >/dev/null 2>&1 \
+  || die "could not build the extension. Run 'npm install' in $REPO_ROOT and try again."
+step "built the extension"
+
+# ---------------------------------------------------------------- dev symlink
+
+if [ "$mode" = dev ]; then
+  base="${VSCODE_EXTENSIONS_DIR:-$HOME/.vscode/extensions}"
+  target="$base/$EXT_ID-dev"
+  mkdir -p "$base"
+  [ -e "$target" ] && rm -rf "$target"
+  ln -s "$EXT_DIR" "$target"
+  step "symlinked $target → $EXT_DIR"
+  note "rebuilds go live on window reload, with no reinstall"
+  warn "a broken build now breaks your real editor — use plain install if that matters"
+  printf '\n  Reload your VSCode windows to pick it up.\n\n'
+  exit 0
+fi
+
+# ---------------------------------------------------------------- package and install
+
+( cd "$EXT_DIR" && npx --yes @vscode/vsce package --no-dependencies --allow-missing-repository ) >/dev/null 2>&1 \
+  || die "could not package the extension"
+
+vsix="$(find "$EXT_DIR" -maxdepth 1 -name '*.vsix' | head -1)"
+[ -n "$vsix" ] || die "packaging produced no .vsix"
+step "packaged ($(du -h "$vsix" | cut -f1 | tr -d ' '))"
+
+code_cli --install-extension "$vsix" >/dev/null || die "VSCode refused to install $vsix"
+rm -f "$vsix"
+
+version="$(code_cli --list-extensions --show-versions | grep "^$EXT_ID@" || true)"
+step "installed ${version:-$EXT_ID}"
+
+# ---------------------------------------------------------------- can it reach the CLI?
+
+printf '\n'
+cli="$(find_tasks)"
+if [ -n "$cli" ]; then
+  step "'tasks' is on your shell PATH at $cli"
+  note "if the board says it cannot find the CLI, VSCode was launched without your"
+  note "shell environment. Set taskTracker.cliPath to $cli and it will not matter."
+else
+  warn "'tasks' is not on your PATH — the board will have nothing to read"
+  note "install it with:  $REPO_ROOT/bin/install-cli"
+fi
+
+printf '\n  %sDone.%s Reload your VSCode windows, then run %sTask Tracker: Open Board%s.\n\n' \
+  "$BOLD" "$RESET" "$BOLD" "$RESET"

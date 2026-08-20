@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+out/
+*.tsbuildinfo
+*.vsix
+
+# task store — local working memory, never committed
+.tasks/
+
+# editor / os
+.DS_Store
+*.log
+.vscode-test/

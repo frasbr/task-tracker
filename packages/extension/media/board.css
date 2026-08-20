@@ -1,0 +1,281 @@
+/*
+ * Board styling.
+ *
+ * Every colour comes from a --vscode-* variable, which is what makes the board track
+ * the user's theme without knowing anything about it. Hard-coding a colour here is how
+ * a webview ends up looking like a website that got embedded in an editor.
+ */
+
+:root {
+  --gap: 12px;
+  --radius: 4px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex: none;
+}
+
+.project {
+  margin: 0;
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.total {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.refresh {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 0.9em;
+  padding: 4px 12px;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+}
+
+.refresh:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+}
+
+.refresh:focus-visible,
+.ref:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- columns */
+
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 1fr);
+  gap: var(--gap);
+  padding: var(--gap) 16px 20px;
+  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+  align-items: start;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 8px;
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+}
+
+.column-title {
+  margin: 0;
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+}
+
+.column-count {
+  font-size: 0.75em;
+  padding: 1px 7px;
+  border-radius: 9px;
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 1px 1px 4px;
+}
+
+.column-empty {
+  margin: 0;
+  padding: 10px 4px;
+  font-size: 0.85em;
+  font-style: italic;
+  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+}
+
+/* ---------------------------------------------------------------- cards */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 11px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--column-accent, var(--vscode-panel-border));
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+}
+
+.column-backlog .card {
+  --column-accent: var(--vscode-descriptionForeground);
+}
+.column-priority .card {
+  --column-accent: var(--vscode-editorWarning-foreground);
+}
+.column-in-progress .card {
+  --column-accent: var(--vscode-charts-blue, var(--vscode-textLink-foreground));
+}
+.column-done .card {
+  --column-accent: var(--vscode-charts-green, var(--vscode-testing-iconPassed));
+}
+
+.card-title {
+  margin: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.column-done .card-title {
+  color: var(--vscode-descriptionForeground);
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.category,
+.tag {
+  font-size: 0.78em;
+  padding: 1px 7px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
+.category {
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+}
+
+.tag {
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.refs {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.ref {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.78em;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--vscode-textLink-foreground);
+  overflow-wrap: anywhere;
+}
+
+.ref:hover {
+  color: var(--vscode-textLink-activeForeground);
+  text-decoration: underline;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.card-id {
+  font-family: var(--vscode-editor-font-family);
+}
+
+.card-has-notes::before {
+  content: '·';
+  margin-right: 8px;
+}
+
+/* ---------------------------------------------------------------- placeholders */
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: auto;
+  padding: 32px;
+  max-width: 52ch;
+}
+
+.placeholder-heading {
+  margin: 0;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.placeholder-text {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--vscode-descriptionForeground);
+}
+
+.placeholder-hint {
+  margin: 0;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  color: var(--vscode-textPreformat-foreground);
+  background: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
+}

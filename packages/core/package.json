@@ -1,0 +1,14 @@
+{
+  "name": "@task-tracker/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Task schema, validation, and the only code that touches the store.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"src/**/*.test.ts\""
+  }
+}
