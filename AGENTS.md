@@ -15,18 +15,21 @@ Full design, rationale, component breakdown and phasing: **[PLAN.md](PLAN.md)**.
 
 ## Where the work is
 
-Phases 0-3 are done. **Phase 4 is next: editing, drag, and the file watcher.**
+Phases 0-4 are done. **Phase 5 is next: code refs and filters.**
 
-The board renders today but is read-only. Phase 4 makes it two-way — a detail view that edits
-every field, creating a task from the board, drag between and within columns persisted through
-`rank`, and the `.tasks/` watcher that makes an agent's writes appear without a refresh.
+The board is two-way: cards open their document, drag persists through `rank`, tasks are created
+and deleted from both surfaces, and the `.tasks/` watcher makes an agent's writes appear without
+a refresh. Phase 5 is the payoff for living inside the editor — filtering a column by category and
+tag, sorting it by rank, recency or age, and colouring the sidebar by category.
 
-Two things phase 4 must get right, both named in [PLAN.md](PLAN.md#what-will-bite):
+Two rules phase 4 established that phase 5 must not undo:
 
-- **Watcher thrash.** The board's own writes retrigger its watcher. Debounce, and ignore writes
-  the extension itself caused, or a drag will re-render underneath the cursor.
 - **Every mutation goes through the CLI.** The webview asks the host, the host spawns `tasks`.
-  Do not let the webview hold authoritative state — it renders what the store says.
+  Do not let the webview hold authoritative state — it renders what the store says. Filtering and
+  sorting are the exception that proves it: they are view state, they belong in the webview, and
+  they must survive a re-render rather than being written anywhere.
+- **Watcher thrash.** The board's own writes retrigger its watcher. A render arriving mid-drag is
+  deferred until the drag ends; keep that guard when you touch the render path.
 
 To try it: press F5, or run the "Run the Task Tracker extension" launch configuration. That opens
 a development host; run `Task Tracker: Open Board` in it with a project folder open.
@@ -69,6 +72,7 @@ packages/core/                schema, validation, store. No I/O opinions, no CLI
   src/rank.ts                 fractional ordering keys + the renumbering trigger
   src/ids.ts                  short, non-reusable, mistype-resistant task IDs
   src/jsonl.ts                the TaskStore implementation. Atomic write-and-rename.
+  src/document.ts             a task as an editable text document, and back again
   src/locate.ts               walking up from cwd to find the project's .tasks/
   src/index.ts                public surface — the only thing other packages import
 
@@ -84,12 +88,16 @@ packages/cli/                 the `tasks` binary. The only writer of the store.
 
 packages/extension/           the VSCode extension
   src/extension.ts            activation + command registration. Nothing else.
+  src/tasks-tree.ts           the activity-bar list. Same CLI data as the board, grouped.
+  src/task-document.ts        the `task:` filesystem provider — tasks as editor tabs
   src/board-panel.ts          webview lifecycle, message marshalling, opening refs
   src/cli.ts                  spawns `tasks --json`. The only route to task data.
-  src/interpret.ts            the two pure bits worth testing: ref parsing, error mapping
+  src/interpret.ts            the pure bits worth testing: ref parsing, error mapping, wording
   src/protocol.ts             host ↔ webview message types (and BoardTask — see below)
   src/webview/main.ts         board UI — browser context, no Node APIs
   media/board.css             styling, entirely in --vscode-* theme variables
+  media/icon-board-*.svg      the editor title-bar button icon (light/dark pair)
+  media/icon-activitybar.svg  the activity-bar icon (24x24, masked and tinted by VSCode)
   esbuild.mjs                 two bundles: extension (CJS) + webview (ESM)
 ```
 
