@@ -1,16 +1,21 @@
-import { open, readFile, rename, unlink } from 'node:fs/promises';
-import { randomBytes } from 'node:crypto';
-import { nextId } from './ids.ts';
+import { readFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { writeFileAtomically } from './atomic.ts';
+import { ConfigError, DEFAULT_PREFIX, checkStatusList, readConfig, writeConfig } from './config.ts';
+import type { ProjectConfig } from './config.ts';
+import { formatId, isLegacyId } from './ids.ts';
+import type { IdMigration } from './migrate.ts';
+import { migrateIds } from './migrate.ts';
 import { needsRenumber, rankBetween, renumberRanks } from './rank.ts';
-import { TASK_STATUSES } from './task.ts';
+import { DEFAULT_STATUSES } from './task.ts';
 import type { Task, TaskStatus } from './task.ts';
 import { TASK_FIELDS, TaskValidationError, parseTask } from './validate.ts';
-import type { TaskDraft, TaskFilter, TaskPatch, TaskStore } from './store.ts';
+import type { StatusPosition, TaskDraft, TaskFilter, TaskPatch, TaskStore } from './store.ts';
 
 /**
  * The JSONL store. One task per line, one file per project.
  *
- * Two properties are load-bearing:
+ * Two crucial properties:
  *
  * **Atomic writes.** Every save writes a temporary file, flushes it to disk, and
  * renames it over the real one. Rename is atomic on every platform we care about, so a
@@ -22,10 +27,6 @@ import type { TaskDraft, TaskFilter, TaskPatch, TaskStore } from './store.ts';
  * a fixed order. That makes the file readable top-to-bottom, keeps diffs meaningful,
  * and means a `grep` for a task returns something a human can parse.
  */
-
-const STATUS_ORDER = new Map<TaskStatus, number>(
-  TASK_STATUSES.map((status, index) => [status, index]),
-);
 
 export function createJsonlStore(file: string): TaskStore {
   return new JsonlStore(file);
@@ -39,22 +40,27 @@ class JsonlStore implements TaskStore {
   }
 
   async list(filter?: TaskFilter): Promise<Task[]> {
-    const tasks = await this.#read();
+    const { tasks } = await this.#read();
     return filter ? tasks.filter((task) => matches(task, filter)) : tasks;
   }
 
   async get(id: string): Promise<Task | undefined> {
-    const tasks = await this.#read();
+    const { tasks } = await this.#read();
     return tasks.find((task) => task.id === id);
   }
 
   async create(draft: TaskDraft): Promise<Task> {
-    const tasks = await this.#read();
+    const { tasks, config } = await this.#read();
     const now = new Date().toISOString();
     const column = tasks.filter((task) => task.status === draft.status);
 
+    // The counter is written before the task it names: a crash between the two leaves
+    // a gap in the numbering (harmless) rather than two tasks sharing a number (not).
+    const id = formatId(config.prefix, config.nextId);
+    await writeConfig(dirname(this.#file), { ...config, nextId: config.nextId + 1 });
+
     const task: Task = {
-      id: nextId(new Set(tasks.map((existing) => existing.id))),
+      id,
       title: draft.title,
       notes: draft.notes,
       category: draft.category,
@@ -66,11 +72,11 @@ class JsonlStore implements TaskStore {
       refs: draft.refs,
     };
 
-    return this.#writeAndReturn([...tasks, task], task.id);
+    return this.#writeAndReturn([...tasks, task], task.id, config.prefix, config.statuses);
   }
 
   async update(id: string, patch: TaskPatch): Promise<Task> {
-    const tasks = await this.#read();
+    const { tasks, config } = await this.#read();
     const existing = this.#require(tasks, id);
 
     // Changing status through `update` still needs a position in the new column.
@@ -92,6 +98,8 @@ class JsonlStore implements TaskStore {
     return this.#writeAndReturn(
       tasks.map((task) => (task.id === id ? updated : task)),
       id,
+      config.prefix,
+      config.statuses,
     );
   }
 
@@ -100,7 +108,7 @@ class JsonlStore implements TaskStore {
     status: TaskStatus,
     position?: { after?: string; before?: string },
   ): Promise<Task> {
-    const tasks = await this.#read();
+    const { tasks, config } = await this.#read();
     const existing = this.#require(tasks, id);
 
     const column = tasks.filter((task) => task.status === status && task.id !== id).sort(byRank);
@@ -117,13 +125,119 @@ class JsonlStore implements TaskStore {
     return this.#writeAndReturn(
       tasks.map((task) => (task.id === id ? moved : task)),
       id,
+      config.prefix,
+      config.statuses,
     );
   }
 
   async remove(id: string): Promise<void> {
-    const tasks = await this.#read();
+    const { tasks, config } = await this.#read();
     this.#require(tasks, id);
-    await this.#write(tasks.filter((task) => task.id !== id));
+    await writeTasks(
+      this.#file,
+      tasks.filter((task) => task.id !== id),
+      config.prefix,
+      config.statuses,
+    );
+  }
+
+  async listStatuses(): Promise<string[]> {
+    const { config } = await this.#read();
+    return config.statuses;
+  }
+
+  async addStatus(name: string, position?: StatusPosition): Promise<string[]> {
+    const { config } = await this.#read();
+    if (config.statuses.includes(name.trim())) {
+      throw new ConfigError(`A status named '${name.trim()}' already exists.`);
+    }
+    const statuses = checkStatusList(placeInList(config.statuses, name.trim(), position), 'config');
+    await writeConfig(dirname(this.#file), { ...config, statuses });
+    return statuses;
+  }
+
+  async renameStatus(from: string, to: string): Promise<string[]> {
+    const { tasks, config } = await this.#read();
+    requireStatus(config.statuses, from);
+
+    const statuses = checkStatusList(
+      config.statuses.map((status) => (status === from ? to.trim() : status)),
+      'config',
+    );
+
+    // Config first, then the tasks it now describes — the same crash-ordering `create`
+    // uses. A card is never left naming a column the config no longer lists.
+    await writeConfig(dirname(this.#file), { ...config, statuses });
+    await writeTasks(
+      this.#file,
+      tasks.map((task) => (task.status === from ? { ...task, status: to.trim() } : task)),
+      config.prefix,
+      statuses,
+    );
+    return statuses;
+  }
+
+  async reorderStatus(name: string, position?: StatusPosition): Promise<string[]> {
+    const { config } = await this.#read();
+    requireStatus(config.statuses, name);
+    const statuses = checkStatusList(placeInList(config.statuses, name, position), 'config');
+    await writeConfig(dirname(this.#file), { ...config, statuses });
+    return statuses;
+  }
+
+  async removeStatus(name: string, moveTo?: string): Promise<string[]> {
+    const { tasks, config } = await this.#read();
+    requireStatus(config.statuses, name);
+
+    const statuses = checkStatusList(
+      config.statuses.filter((status) => status !== name),
+      'config',
+    );
+
+    const inColumn = tasks.filter((task) => task.status === name).sort(byRank);
+    if (inColumn.length > 0 && moveTo === undefined) {
+      throw new ConfigError(
+        `'${name}' still holds ${inColumn.length} task${inColumn.length === 1 ? '' : 's'}. ` +
+          `Pass where they should go, e.g. --move-to=${statuses[0]}.`,
+      );
+    }
+
+    if (inColumn.length === 0) {
+      // Nothing to move: only the config changes. Every remaining task still names a
+      // listed column, so the store file does not need rewriting.
+      await writeConfig(dirname(this.#file), { ...config, statuses });
+      return statuses;
+    }
+
+    if (!statuses.includes(moveTo!)) {
+      throw new ConfigError(
+        `Cannot move tasks to '${moveTo}': it is not a status here. Use one of: ${statuses.join(', ')}.`,
+      );
+    }
+
+    // Fresh ranks at the end of the destination, in the tasks' current order — carrying
+    // the old ranks across would interleave them wrongly with what is already there.
+    let last =
+      tasks
+        .filter((task) => task.status === moveTo)
+        .sort(byRank)
+        .at(-1)?.rank ?? null;
+    const reranked = new Map<string, string>();
+    for (const task of inColumn) {
+      last = rankBetween(last, null);
+      reranked.set(task.id, last);
+    }
+
+    await writeConfig(dirname(this.#file), { ...config, statuses });
+    await writeTasks(
+      this.#file,
+      tasks.map((task) =>
+        task.status === name ? { ...task, status: moveTo!, rank: reranked.get(task.id)! } : task,
+      ),
+      config.prefix,
+      statuses,
+    );
+    return statuses;
   }
 
   #require(tasks: readonly Task[], id: string): Task {
@@ -137,33 +251,18 @@ class JsonlStore implements TaskStore {
     return task;
   }
 
-  async #read(): Promise<Task[]> {
-    let contents: string;
-    try {
-      contents = await readFile(this.#file, 'utf8');
-    } catch (error) {
-      if (isMissingFile(error)) return [];
-      throw error;
-    }
+  /**
+   * Reads the raw lines, then resolves the project's config before validating any of
+   * them against it — the config decides what a valid id even looks like here.
+   */
+  async #read(): Promise<{ tasks: Task[]; config: ProjectConfig }> {
+    const lines = await readRawLines(this.#file);
+    const config = await this.#resolveConfig(lines);
 
     const tasks: Task[] = [];
     const seen = new Set<string>();
-    const lines = contents.split('\n');
-
-    for (const [index, line] of lines.entries()) {
-      if (line.trim() === '') continue;
-      const where = `${this.#file}:${index + 1}`;
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        throw new TaskValidationError(
-          `${where}: not valid JSON. Each line of the store is one complete task object. If this file was edited by hand, that is the likely cause.`,
-        );
-      }
-
-      const task = parseTask(parsed, where);
+    for (const { where, parsed } of lines) {
+      const task = parseTask(parsed, where, config.prefix, config.statuses);
       if (seen.has(task.id)) {
         throw new TaskValidationError(`${where}: duplicate task ID '${task.id}'.`, 'id');
       }
@@ -171,49 +270,162 @@ class JsonlStore implements TaskStore {
       tasks.push(task);
     }
 
-    return tasks.sort(byColumnThenRank);
+    return { tasks: tasks.sort(byColumnThenRank(statusOrder(config.statuses))), config };
   }
 
   /**
-   * Writes, then hands back the task as it was actually stored.
-   *
-   * Callers must not return the object they built: normalisation and column
-   * renumbering can both change it, and a return value that disagrees with the file
-   * is exactly the kind of drift that is impossible to debug later.
+   * `.tasks/config.json` may not exist yet: a store with no tasks gets a fresh default
+   * config the first time anything needs one, the same way an empty store has always
+   * needed no ceremony. A store that already has tasks but no config predates phase 6 —
+   * its ids only make sense once `tasks migrate-ids` has renumbered them, so that store
+   * refuses to read rather than silently adopting a prefix nobody chose.
    */
-  async #writeAndReturn(tasks: readonly Task[], id: string): Promise<Task> {
-    const written = await this.#write(tasks);
+  async #resolveConfig(lines: readonly RawLine[]): Promise<ProjectConfig> {
+    const existing = await readConfig(dirname(this.#file));
+    if (existing !== undefined) return existing;
+
+    if (lines.length === 0) {
+      const fresh: ProjectConfig = {
+        prefix: DEFAULT_PREFIX,
+        nextId: 1,
+        statuses: [...DEFAULT_STATUSES],
+      };
+      await writeConfig(dirname(this.#file), fresh);
+      return fresh;
+    }
+
+    if (looksLegacy(lines[0]!.parsed)) {
+      throw new TaskValidationError(
+        `${this.#file}: this store still has pre-incremental task IDs. Run \`tasks migrate-ids\` to convert them.`,
+      );
+    }
+
+    throw new TaskValidationError(
+      `${dirname(this.#file)}: missing config.json. Run \`tasks init\` to create one.`,
+    );
+  }
+
+  async #writeAndReturn(
+    tasks: readonly Task[],
+    id: string,
+    prefix: string,
+    statuses: readonly string[],
+  ): Promise<Task> {
+    const written = await writeTasks(this.#file, tasks, prefix, statuses);
     const task = written.find((candidate) => candidate.id === id);
     if (!task) {
       throw new TaskValidationError(`Task '${id}' vanished during the write.`, 'id');
     }
     return task;
   }
+}
 
-  /**
-   * Validating here as well as on read is deliberate. Without it a bad value reaches
-   * disk and only fails the *next* time the store is opened, by which point the caller
-   * that wrote it is long gone.
-   */
-  async #write(tasks: readonly Task[]): Promise<Task[]> {
-    const ordered = [...tasks].sort(byColumnThenRank);
-    const settled = renumberExhaustedColumns(ordered);
-    const validated = settled.map((task, index) => parseTask(task, `${this.#file}:${index + 1}`));
-    const body = validated.map(serialise).join('\n');
-    await writeAtomically(this.#file, validated.length > 0 ? `${body}\n` : '');
-    return validated;
-  }
+// ---------------------------------------------------------------- migration
+
+/**
+ * The one-shot conversion off legacy ids, for `tasks migrate-ids`. Reads every task
+ * leniently (a legacy id is not a valid id for any prefix, so the normal read path
+ * cannot be used here), renumbers, and writes the config and the store — config first,
+ * for the same crash-ordering reason `create` writes it first.
+ */
+export async function migrateStore(file: string, prefix: string): Promise<IdMigration> {
+  const lines = await readRawLines(file);
+  const tasks = lines.map(({ where, parsed }) => parseTask(parsed, where, undefined));
+
+  const migration = migrateIds(tasks, prefix);
+  await writeConfig(dirname(file), migration.config);
+  await writeTasks(file, migration.tasks, prefix, migration.config.statuses);
+
+  return migration;
 }
 
 // ---------------------------------------------------------------- helpers
+
+interface RawLine {
+  where: string;
+  parsed: unknown;
+}
+
+/** Reads the store file, JSON-parsing each non-blank line. Ids are not checked here. */
+async function readRawLines(file: string): Promise<RawLine[]> {
+  let contents: string;
+  try {
+    contents = await readFile(file, 'utf8');
+  } catch (error) {
+    if (isMissingFile(error)) return [];
+    throw error;
+  }
+
+  const lines: RawLine[] = [];
+  for (const [index, line] of contents.split('\n').entries()) {
+    if (line.trim() === '') continue;
+    const where = `${file}:${index + 1}`;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      throw new TaskValidationError(
+        `${where}: not valid JSON. Each line of the store is one complete task object. If this file was edited by hand, that is the likely cause.`,
+      );
+    }
+    lines.push({ where, parsed });
+  }
+
+  return lines;
+}
+
+/** Throws a listing error when `name` is not one of the project's statuses. */
+function requireStatus(statuses: readonly string[], name: string): void {
+  if (!statuses.includes(name)) {
+    throw new ConfigError(`'${name}' is not a status here. Use one of: ${statuses.join(', ')}.`);
+  }
+}
+
+/**
+ * Returns `list` with `name` placed at `position` — after or before a named neighbour,
+ * or at the end when neither is given. `name` is removed first, so this both inserts a
+ * new status and reorders an existing one. A named neighbour that is not present is an
+ * error rather than a silent append, since the caller was pointing at something.
+ */
+function placeInList(list: readonly string[], name: string, position?: StatusPosition): string[] {
+  const without = list.filter((status) => status !== name);
+
+  const anchor = position?.after ?? position?.before;
+  if (anchor === undefined) return [...without, name];
+
+  const index = without.indexOf(anchor);
+  if (index < 0) {
+    throw new ConfigError(`'${anchor}' is not a status here. Use one of: ${without.join(', ')}.`);
+  }
+  const at = position?.after !== undefined ? index + 1 : index;
+  return [...without.slice(0, at), name, ...without.slice(at)];
+}
+
+function looksLegacy(parsed: unknown): boolean {
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false;
+  return isLegacyId((parsed as Record<string, unknown>)['id']);
+}
 
 function byRank(a: Task, b: Task): number {
   return a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0;
 }
 
-function byColumnThenRank(a: Task, b: Task): number {
-  const columns = STATUS_ORDER.get(a.status)! - STATUS_ORDER.get(b.status)!;
-  return columns !== 0 ? columns : byRank(a, b);
+/** A status → column-index lookup, built from the project's configured order. */
+function statusOrder(statuses: readonly string[]): Map<string, number> {
+  return new Map(statuses.map((status, index) => [status, index]));
+}
+
+/**
+ * Sorts by column, then by rank within it. Column order is the project's configured
+ * status order. A status not in that order sorts after every configured one — a
+ * transient state, since the write path validates each task against the same list.
+ */
+function byColumnThenRank(order: Map<string, number>): (a: Task, b: Task) => number {
+  return (a, b) => {
+    const columns = (order.get(a.status) ?? order.size) - (order.get(b.status) ?? order.size);
+    return columns !== 0 ? columns : byRank(a, b);
+  };
 }
 
 function lastRankIn(tasks: readonly Task[], status: TaskStatus, excludeId: string): string | null {
@@ -271,10 +483,10 @@ function resolveNeighbours(
  * This is the renumbering trigger PLAN.md calls for. It runs on every write, which is
  * cheap because the check is a length comparison and the rebuild almost never fires.
  */
-function renumberExhaustedColumns(tasks: readonly Task[]): Task[] {
+function renumberExhaustedColumns(tasks: readonly Task[], statuses: readonly string[]): Task[] {
   const result = [...tasks];
 
-  for (const status of TASK_STATUSES) {
+  for (const status of statuses) {
     const indices = result
       .map((task, index) => ({ task, index }))
       .filter((entry) => entry.task.status === status);
@@ -300,26 +512,29 @@ function serialise(task: Task): string {
 }
 
 /**
- * Write, flush, rename. The temporary file is created beside the target so the rename
- * stays within one filesystem, which is what makes it atomic.
+ * Validates and writes a full task list, then hands back the tasks as they were
+ * actually stored — normalisation and column renumbering can both change a task, and a
+ * return value that disagrees with the file is exactly the kind of drift that is
+ * impossible to debug later.
+ *
+ * Validating here as well as on read is deliberate. Without it a bad value reaches disk
+ * and only fails the *next* time the store is opened, by which point the caller that
+ * wrote it is long gone.
  */
-async function writeAtomically(file: string, contents: string): Promise<void> {
-  const temp = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
-  const handle = await open(temp, 'wx');
-
-  try {
-    await handle.writeFile(contents, 'utf8');
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-
-  try {
-    await rename(temp, file);
-  } catch (error) {
-    await unlink(temp).catch(() => {});
-    throw error;
-  }
+async function writeTasks(
+  file: string,
+  tasks: readonly Task[],
+  prefix: string,
+  statuses: readonly string[],
+): Promise<Task[]> {
+  const ordered = [...tasks].sort(byColumnThenRank(statusOrder(statuses)));
+  const settled = renumberExhaustedColumns(ordered, statuses);
+  const validated = settled.map((task, index) =>
+    parseTask(task, `${file}:${index + 1}`, prefix, statuses),
+  );
+  const body = validated.map(serialise).join('\n');
+  await writeFileAtomically(file, validated.length > 0 ? `${body}\n` : '');
+  return validated;
 }
 
 function isMissingFile(error: unknown): boolean {

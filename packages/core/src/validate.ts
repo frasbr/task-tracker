@@ -1,6 +1,6 @@
 import { isId } from './ids.ts';
 import { isRank } from './rank.ts';
-import { TASK_STATUSES, isTaskStatus } from './task.ts';
+import { DEFAULT_STATUSES, isTaskStatus } from './task.ts';
 import type { Task } from './task.ts';
 import type { TaskDraft, TaskPatch } from './store.ts';
 
@@ -125,10 +125,10 @@ function checkTags(value: unknown, where: string): string[] {
   return [...new Set(tags)].sort();
 }
 
-function checkStatus(value: unknown, where: string): Task['status'] {
-  if (!isTaskStatus(value)) {
+function checkStatus(value: unknown, where: string, statuses: readonly string[]): Task['status'] {
+  if (!isTaskStatus(value, statuses)) {
     fail(
-      `${where}: '${String(value)}' is not a status. Use one of: ${TASK_STATUSES.join(', ')}.`,
+      `${where}: '${String(value)}' is not a status. Use one of: ${statuses.join(', ')}.`,
       'status',
     );
   }
@@ -175,8 +175,25 @@ function checkRefs(value: unknown, where: string): string[] {
 
 // ---------------------------------------------------------------- entry points
 
-/** Parses and normalises a complete task, as read from the store. */
-export function parseTask(input: unknown, where: string): Task {
+/**
+ * Parses and normalises a complete task, as read from the store.
+ *
+ * `prefix` is the project's own — every id must belong to it, the same way status
+ * validation checks against the project's config rather than a fixed enum. Pass
+ * `undefined` only from a migration reading a store that still has legacy ids: it skips
+ * the shape check and requires nothing more than a non-empty string, since the id is
+ * about to be replaced anyway.
+ *
+ * `statuses` is the project's configured list. The store passes its config's list; the
+ * default is the four names a fresh project has, so a caller that has no config yet still
+ * validates against something sensible rather than accepting anything.
+ */
+export function parseTask(
+  input: unknown,
+  where: string,
+  prefix: string | undefined,
+  statuses: readonly string[] = DEFAULT_STATUSES,
+): Task {
   const record = asRecord(input, where);
   rejectUnknownFields(record, TASK_FIELDS, where);
 
@@ -184,17 +201,21 @@ export function parseTask(input: unknown, where: string): Task {
     if (!(field in record)) fail(`${where}: missing required field '${field}'.`, field);
   }
 
-  if (!isId(record['id'])) {
-    fail(`${where}: '${String(record['id'])}' is not a valid task ID.`, 'id');
+  const id = record['id'];
+  if (prefix === undefined) {
+    if (typeof id !== 'string' || id === '')
+      fail(`${where}: 'id' must be a non-empty string.`, 'id');
+  } else if (!isId(id, prefix)) {
+    fail(`${where}: '${String(id)}' is not a valid task ID.`, 'id');
   }
 
   return {
-    id: record['id'],
+    id,
     title: checkTitle(record['title'], where),
     notes: checkNotes(record['notes'], where),
     category: checkCategory(record['category'], where),
     tags: checkTags(record['tags'], where),
-    status: checkStatus(record['status'], where),
+    status: checkStatus(record['status'], where, statuses),
     rank: checkRank(record['rank'], where),
     created: checkTimestamp(record['created'], 'created', where),
     updated: checkTimestamp(record['updated'], 'updated', where),
@@ -202,8 +223,16 @@ export function parseTask(input: unknown, where: string): Task {
   };
 }
 
-/** Parses and normalises a new task's fields. The store allocates id, rank and timestamps. */
-export function parseDraft(input: unknown, where = 'new task'): TaskDraft {
+/**
+ * Parses and normalises a new task's fields. The store allocates id, rank and timestamps.
+ * An absent status defaults to the first configured column — a new task lands at the head
+ * of the board, whatever that column is named.
+ */
+export function parseDraft(
+  input: unknown,
+  statuses: readonly string[] = DEFAULT_STATUSES,
+  where = 'new task',
+): TaskDraft {
   const record = asRecord(input, where);
   rejectUnknownFields(record, DRAFT_FIELDS, where);
 
@@ -212,7 +241,7 @@ export function parseDraft(input: unknown, where = 'new task'): TaskDraft {
     notes: 'notes' in record ? checkNotes(record['notes'], where) : '',
     category: 'category' in record ? checkCategory(record['category'], where) : '',
     tags: 'tags' in record ? checkTags(record['tags'], where) : [],
-    status: 'status' in record ? checkStatus(record['status'], where) : 'backlog',
+    status: 'status' in record ? checkStatus(record['status'], where, statuses) : statuses[0]!,
     refs: 'refs' in record ? checkRefs(record['refs'], where) : [],
   };
 
@@ -220,7 +249,11 @@ export function parseDraft(input: unknown, where = 'new task'): TaskDraft {
 }
 
 /** Parses a partial update. Absent fields are left alone; present ones are validated. */
-export function parsePatch(input: unknown, where = 'update'): TaskPatch {
+export function parsePatch(
+  input: unknown,
+  statuses: readonly string[] = DEFAULT_STATUSES,
+  where = 'update',
+): TaskPatch {
   const record = asRecord(input, where);
   rejectUnknownFields(record, PATCH_FIELDS, where);
 
@@ -233,7 +266,7 @@ export function parsePatch(input: unknown, where = 'update'): TaskPatch {
   if ('notes' in record) patch.notes = checkNotes(record['notes'], where);
   if ('category' in record) patch.category = checkCategory(record['category'], where);
   if ('tags' in record) patch.tags = checkTags(record['tags'], where);
-  if ('status' in record) patch.status = checkStatus(record['status'], where);
+  if ('status' in record) patch.status = checkStatus(record['status'], where, statuses);
   if ('rank' in record) patch.rank = checkRank(record['rank'], where);
   if ('refs' in record) patch.refs = checkRefs(record['refs'], where);
   return patch;

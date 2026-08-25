@@ -15,10 +15,16 @@ import { dirname, join, parse, resolve } from 'node:path';
 
 export const STORE_DIR_NAME = '.tasks';
 export const STORE_FILE_NAME = 'tasks.jsonl';
+export const CONFIG_FILE_NAME = 'config.json';
 
 /** Path to the JSONL file inside a given `.tasks/` directory. */
 export function storeFilePath(storeDir: string): string {
   return join(storeDir, STORE_FILE_NAME);
+}
+
+/** Path to the project config inside a given `.tasks/` directory. */
+export function configFilePath(storeDir: string): string {
+  return join(storeDir, CONFIG_FILE_NAME);
 }
 
 async function isDirectory(path: string): Promise<boolean> {

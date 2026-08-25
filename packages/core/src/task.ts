@@ -5,16 +5,31 @@
  * see AGENTS.md before you extend this type.
  */
 
-/** Column the card sits in. Order here is the left-to-right order on the board. */
-export const TASK_STATUSES = ['backlog', 'priority', 'in-progress', 'done'] as const;
+/**
+ * The status list a project gets before its config sets one. Order here is the
+ * left-to-right order on the board and top-to-bottom in the sidebar.
+ *
+ * These four are a default, not a schema: `.tasks/config.json` holds the project's own
+ * ordered list, and validation checks a status against that list, not against this one.
+ * A store with no config file behaves as if this were its list. See PLAN.md § Data model.
+ */
+export const DEFAULT_STATUSES = ['backlog', 'priority', 'in-progress', 'done'] as const;
 
-export type TaskStatus = (typeof TASK_STATUSES)[number];
+/**
+ * A column name. Per-project, so this is a plain `string` rather than a union — the set
+ * of valid names lives in the config and is passed to validation, not fixed at compile
+ * time. Use `isTaskStatus(value, statuses)` to check one against a known list.
+ */
+export type TaskStatus = string;
 
 /** A pointer into real code, e.g. `src/auth.ts` or `src/auth.ts:42-58`. */
 export type TaskRef = string;
 
 export interface Task {
-  /** Stable opaque handle. Survives reordering, editing and status changes. */
+  /**
+   * `<prefix>-<n>`, e.g. `task-tracker-7`. The prefix is the project's own; the number
+   * is monotonic and never reused. Survives reordering, editing and status changes.
+   */
   id: string;
   /** One-line headline shown on the card. */
   title: string;
@@ -34,6 +49,10 @@ export interface Task {
   refs: TaskRef[];
 }
 
-export function isTaskStatus(value: unknown): value is TaskStatus {
-  return typeof value === 'string' && (TASK_STATUSES as readonly string[]).includes(value);
+/** True when `value` is one of `statuses`. Defaults to the four names a fresh project has. */
+export function isTaskStatus(
+  value: unknown,
+  statuses: readonly string[] = DEFAULT_STATUSES,
+): value is TaskStatus {
+  return typeof value === 'string' && statuses.includes(value);
 }
