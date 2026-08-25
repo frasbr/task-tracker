@@ -5,22 +5,12 @@ of truth for architecture and the data model.
 
 ---
 
-## What this is
+## Task Tracker
 
-A per-project kanban board that coding agents and humans edit through one plain-text task store.
+Task-tracker is a tool for creating and managing local, per-project kanban boards. The purpose is to align humans and coding agents on the work being done within a project.
+
 Three parts: a **core library** that owns the data, a **CLI** that is the only thing allowed to
 touch the store, and a **VSCode extension** that renders a board by shelling out to that CLI.
-
-## Where the work is
-
-Phases 0-4 are done. **Phase 5 is next: code refs and filters.**
-
-The board is two-way: cards open their document, drag persists through `rank`, tasks are created
-and deleted from both surfaces, and the `.tasks/` watcher makes an agent's writes appear without
-a refresh. Phase 5 is the payoff for living inside the editor — filtering a column by category and
-tag, sorting it by rank, recency or age, and colouring the sidebar by category.
-
-Two rules phase 4 established that phase 5 must not undo:
 
 - **Every mutation goes through the CLI.** The webview asks the host, the host spawns `tasks`.
   Do not let the webview hold authoritative state — it renders what the store says. Filtering and
@@ -51,53 +41,32 @@ or `npm run watch -w @task-tracker/cli` for a rebuild loop.
 
 ## Repo map
 
-```
-AGENTS.md                     this file. How to work here, and the source of truth for
-                              architecture and data-model decisions.
-.claude/skills/tasks/         the skill that teaches agents to USE the tool (not build it).
-                              Compiled into the tasks binary and installed by `tasks init`.
-                              This is the master copy — edit it here, never in ~/.claude.
-bin/install-cli               installs `tasks` to ~/.local/bin as a standalone copy
-bin/install-extension         builds, packages and installs the board into VSCode
-                              (--status / --uninstall / --dev; VSCODE_EXTENSIONS_DIR
-                              redirects it, which is how it is tested safely)
-bin/tasks-init                one-command setup for a new repo: skill + store
+This map lists the key directories and their purpose. To be used as a rough guide to the codebase.
 
-packages/core/                schema, validation, store. No I/O opinions, no CLI concerns.
-  src/task.ts                 the ten-field Task model + status enum
-  src/store.ts                the TaskStore interface every caller depends on
-  src/validate.ts             parsing + the unknown-field rejection that stops schema drift
-  src/rank.ts                 fractional ordering keys + the renumbering trigger
-  src/ids.ts                  short, non-reusable, mistype-resistant task IDs
-  src/jsonl.ts                the TaskStore implementation. Atomic write-and-rename.
-  src/document.ts             a task as an editable text document, and back again
-  src/locate.ts               walking up from cwd to find the project's .tasks/
-  src/index.ts                public surface — the only thing other packages import
+When adding to or updating this map:
+ - do not list or describe specific files
+ - avoid describing specific boundaries - add those instead to the boundaries section below
 
-packages/cli/                 the `tasks` binary. The only writer of the store.
-  src/index.ts                entry point: wires run() to the real terminal
-  src/run.ts                  dispatch + every verb. Takes its IO as arguments.
-  src/args.ts                 the small hand-rolled flag parser
-  src/format.ts               compact lines vs --json. Two modes, not one prettied.
-  src/help.ts                 usage text — keep in step with SKILL.md
-  src/skill.ts                installs the skill, which is bundled into the binary
-  md-loader.mjs               lets `node --test` load the .md import esbuild inlines
-  esbuild.mjs                 bundles to dist/tasks.js (ESM, shebang)
-
-packages/extension/           the VSCode extension
-  src/extension.ts            activation + command registration. Nothing else.
-  src/tasks-tree.ts           the activity-bar list. Same CLI data as the board, grouped.
-  src/task-document.ts        the `task:` filesystem provider — tasks as editor tabs
-  src/board-panel.ts          webview lifecycle, message marshalling, opening refs
-  src/cli.ts                  spawns `tasks --json`. The only route to task data.
-  src/interpret.ts            the pure bits worth testing: ref parsing, error mapping, wording
-  src/protocol.ts             host ↔ webview message types (and BoardTask — see below)
-  src/webview/main.ts         board UI — browser context, no Node APIs
-  media/board.css             styling, entirely in --vscode-* theme variables
-  media/icon-board-*.svg      the editor title-bar button icon (light/dark pair)
-  media/icon-activitybar.svg  the activity-bar icon (24x24, masked and tinted by VSCode)
-  esbuild.mjs                 two bundles: extension (CJS) + webview (ESM)
-```
+- **`packages/core/`** — the data model and the store behind it: the `Task` shape, validation,
+  fractional ranks, ID minting, per-project config, and the JSONL implementation of `TaskStore`.
+  Holds no opinion about terminals or editors. Boundaries 1 and 5.
+- **`packages/cli/`** — the `tasks` binary: flag parsing, every verb, and two output modes
+  (compact lines, and `--json`). Sole writer of the store, and its `--json` output is the contract
+  the extension reads. The agent skill is bundled into the binary from here.
+  Boundaries 1 and 8; exit codes under Conventions.
+- **`packages/extension/`** — the VSCode extension: the webview board, the activity-bar list,
+  tasks-as-editor-tabs, and the watcher that keeps them in step. Reaches task data only by
+  spawning the CLI. `src/webview/` is the browser half — board UI, no Node APIs — and `media/`
+  holds its CSS and icons. Boundaries 2, 3, 4, 7 and 9.
+- **`bin/`** — the installers. `install-cli` puts a standalone `tasks` on the PATH;
+  `install-extension` builds, packages and installs the board (`--status` / `--uninstall` /
+  `--dev`, and `VSCODE_EXTENSIONS_DIR` redirects it, which is how it is tested safely).
+  `npm run install-all` runs both.
+- **`.claude/skills/tasks/`** — the skill that teaches agents to _use_ the tool, not to build it.
+  Compiled into the `tasks` binary and installed by `tasks init`. Boundary 10.
+- **`.tasks/`** — this repo's own board, kept by the tool itself.
+- **`AGENTS.md`** — this file. How to work here, and the source of truth for architecture and
+  data-model decisions.
 
 ---
 
@@ -161,6 +130,10 @@ These are the architecture. Violating one silently is worse than not doing the t
    MODULE_TYPELESS_PACKAGE_JSON warning because of this; the warning is the correct trade and
    must not be silenced that way.
 
+10. **`.claude/skills/tasks/` is the master copy of the agent skill.** Edit it there, never in
+    `~/.claude/skills`. The CLI bundles this copy into the binary and `tasks init` writes it back
+    out, so an edit made in the installed location is silently overwritten on the next install.
+
 ---
 
 ## Conventions
@@ -184,7 +157,9 @@ A change is done when all of the following are true. Do not report completion ot
 2. New behaviour has tests. Core logic in particular: ranks, ids, validation and round-tripping
    are exactly where silent bugs live.
 3. No boundary above was crossed.
-4. If an architecture or data-model decision changed, AGENTS.md was updated in the same change.
+4. If an architecture or data-model decision changed, AGENTS.md was updated in the same
+   change. Likewise if a directory was added, removed, or changed purpose — the Repo map is
+   only true because updating it is part of done.
 5. If the CLI's interface changed, `.claude/skills/tasks/SKILL.md` was updated to match. That file
    is the contract agents rely on; the two drift apart the moment you forget. It is compiled
    into the binary, so a stale skill ships to every project the user initialises.
