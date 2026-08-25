@@ -14,3 +14,7 @@ out/
 .DS_Store
 *.log
 .vscode-test/
+
+# misc
+wishlist.md
+PLAN.md

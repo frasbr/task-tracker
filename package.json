@@ -16,6 +16,7 @@
     "build": "npm run build --workspaces --if-present",
     "install-cli": "bin/install-cli",
     "install-extension": "bin/install-extension",
+    "install-all": "bin/install-cli && bin/install-extension",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
