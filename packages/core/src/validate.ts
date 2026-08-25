@@ -16,7 +16,7 @@ import type { TaskDraft, TaskPatch } from './store.ts';
  * transcript. Both need to be told what to do next, not just what was wrong.
  */
 
-/** The complete set of task fields. Adding one is a plan-level decision — see PLAN.md. */
+/** The complete set of task fields. Adding one is a design decision — see AGENTS.md. */
 export const TASK_FIELDS = [
   'id',
   'title',
@@ -79,7 +79,7 @@ function rejectUnknownFields(
       `${where}: unknown field${unknown.length > 1 ? 's' : ''} ${unknown
         .map((key) => `'${key}'`)
         .join(', ')}. Tasks have exactly these fields: ${allowed.join(', ')}. ` +
-        `If this field is genuinely needed, it is a change to PLAN.md § Data model, not something to add here.`,
+        `If this field is genuinely needed, it is a change to the data model in AGENTS.md, not something to add here.`,
       unknown[0],
     );
   }

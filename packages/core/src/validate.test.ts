@@ -27,7 +27,7 @@ describe('parseTask', () => {
         assert.ok(error instanceof TaskValidationError);
         assert.match(error.message, /'assignee'/);
         assert.match(error.message, /'due'/);
-        assert.match(error.message, /PLAN\.md/, 'should point at where the schema is decided');
+        assert.match(error.message, /AGENTS\.md/, 'should point at where the schema is decided');
         assert.equal(error.field, 'assignee');
         return true;
       },

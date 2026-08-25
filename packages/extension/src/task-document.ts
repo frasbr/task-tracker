@@ -14,7 +14,7 @@ import { documentName, idFromDocumentName } from './task-naming.ts';
  *
  * That is the whole point of doing it this way: you get the "one file per task" feeling
  * without one file per task, so no migration, no second source of truth, and no route
- * around the CLI's validation. See PLAN.md § Task documents.
+ * around the CLI's validation.
  *
  * The URI is `task:/<prefix>-<n>-<slug>.md` — the qualified id at the front, a slug made
  * from the title for a readable tab name. The id is the identity; the slug is cosmetic

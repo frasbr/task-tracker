@@ -396,8 +396,7 @@ async function createTask(status: string | undefined, watcher: StoreWatcher): Pr
  * command was fired with: a bare id from the board, a tree node from the sidebar's
  * context menu, or nothing from the command palette — each resolved to the same
  * `{ id, title }` shape before the modal ever appears, so the prompt always names what
- * it is about to lose (see PLAN.md § What will bite, on mistyped ids landing on a real
- * task now that they are short).
+ * it is about to lose — ids are short now, so a mistyped one can land on a real task.
  */
 async function deleteTask(target: unknown, watcher: StoreWatcher): Promise<void> {
   const directory = requireWorkspaceDirectory();

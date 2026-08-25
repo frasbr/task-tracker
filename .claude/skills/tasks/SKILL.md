@@ -109,7 +109,7 @@ invent a column by writing a status the project does not have.
 
 1. Never edit `.tasks/tasks.jsonl` by hand.
 2. Never invent fields. The schema is fixed at ten fields and validation will reject anything
-   else — see PLAN.md § Data model.
+   else.
 3. Filter your reads. `tasks list` with no flags is rarely the right call.
 4. Move a task to `in-progress` when you start it, not when you finish it. The board is a live
    picture, multiple actors might be working on it simultaneously, and the human is tracking it.

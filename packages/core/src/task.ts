@@ -1,7 +1,7 @@
 /**
- * The task model. Ten fields, fixed by PLAN.md § Data model.
+ * The task model. Ten fields, fixed.
  *
- * Adding a field here is a plan-level decision, not an implementation detail —
+ * Adding a field here is a design decision, not an implementation detail —
  * see AGENTS.md before you extend this type.
  */
 
@@ -11,7 +11,7 @@
  *
  * These four are a default, not a schema: `.tasks/config.json` holds the project's own
  * ordered list, and validation checks a status against that list, not against this one.
- * A store with no config file behaves as if this were its list. See PLAN.md § Data model.
+ * A store with no config file behaves as if this were its list. See `config.ts`.
  */
 export const DEFAULT_STATUSES = ['backlog', 'priority', 'in-progress', 'done'] as const;
 

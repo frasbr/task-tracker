@@ -11,7 +11,7 @@
  */
 
 /**
- * A column name. Per-project now (PLAN.md § Project statuses): the extension no longer
+ * A column name. Per-project now: the extension no longer
  * knows the set at compile time — it arrives with each `tasks` message, read from
  * `tasks status list --json`. So this is a plain string, not a union of four literals.
  */

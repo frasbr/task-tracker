@@ -7,9 +7,9 @@ through a `tasks` CLI; you read and write them on a kanban board that opens as a
 Both sides watch the same file, so a change from either shows up on the other within about a
 fifth of a second.
 
-**Status: phase 3.** The core library, the `tasks` CLI, and a read-only board are done. Editing,
-drag, and the live file watcher are next. See [PLAN.md](PLAN.md) for the design and phasing, and
-[AGENTS.md](AGENTS.md) for how to work in this repo.
+**Status: phase 4.** The core library, the `tasks` CLI, and a two-way board are done: cards open as
+editor tabs, drag persists order, and a watcher keeps both sides in step. Code refs and filters are
+next. See [AGENTS.md](AGENTS.md) for how to work in this repo.
 
 ## Layout
 

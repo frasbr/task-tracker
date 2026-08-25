@@ -16,7 +16,7 @@ import { dropPosition } from './drop-position.ts';
  * What stays on the card (tt-6): a click opens the task's document — the same
  * `task:/<id>.md` the sidebar opens — and drag is itself the quick status/reorder
  * gesture, plus a delete affordance. A second field-by-field editing surface was
- * considered and rejected; see PLAN.md § Board UI and § Task detail.
+ * considered and rejected.
  *
  * Drag (tt-4) never computes a rank. A drop reports the target column and the ids
  * either side of the gap; the host turns that into `tasks move` and the next `tasks`

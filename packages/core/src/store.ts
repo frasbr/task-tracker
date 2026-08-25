@@ -4,7 +4,7 @@ import type { Task, TaskStatus } from './task.ts';
  * The only interface through which task data is read or written.
  *
  * JSONL is the shipping implementation; this interface exists so a SQLite backend
- * stays a contained swap rather than a rewrite (PLAN.md § Deliberately deferred).
+ * stays a contained swap rather than a rewrite.
  * Nothing outside this package may import a concrete store — callers depend on
  * this type only.
  */

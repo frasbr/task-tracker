@@ -5,9 +5,8 @@ import { DEFAULT_STATUSES } from './task.ts';
 import type { Task } from './task.ts';
 
 /**
- * The one-shot conversion off opaque legacy IDs onto `<prefix>-<n>`. See PLAN.md §
- * Decisions already locked, "Task IDs", and the CLI's `migrate-ids` verb, which is the
- * only thing meant to call this.
+ * The one-shot conversion off opaque legacy IDs onto `<prefix>-<n>`. See `ids.ts` for the
+ * id format, and the CLI's `migrate-ids` verb, which is the only thing meant to call this.
  */
 
 export interface IdMigration {

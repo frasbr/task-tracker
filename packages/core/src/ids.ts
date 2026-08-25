@@ -1,10 +1,9 @@
 /**
  * Task IDs: `<prefix>-<n>`, e.g. `task-tracker-7`.
  *
- * See PLAN.md § Decisions already locked, "Task IDs". The stored `id` is the whole
- * qualified string, not a bare number with the prefix applied at render time — the id
- * is the handle people quote, so it should say what it is. Parsing splits on the LAST
- * hyphen, because the prefix itself may contain them.
+ * The stored `id` is the whole qualified string, not a bare number with the prefix
+ * applied at render time — the id is the handle people quote, so it should say what it
+ * is. Parsing splits on the LAST hyphen, because the prefix itself may contain them.
  *
  * The number is never reused: it comes from a monotonic counter in the project's
  * config (see config.ts), not from the tasks currently in the store.

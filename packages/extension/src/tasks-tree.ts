@@ -19,7 +19,7 @@ import { TASK_SCHEME, idOf, taskUri } from './task-document.ts';
  * The columns are the project's own, in the order the CLI reports — this view holds no
  * list of its own. A column's label, icon and whether it starts open are all derived
  * from the name and its position, never a per-name table, because a status can now be
- * called anything (PLAN.md § Project statuses).
+ * called anything.
  *
  * Clicking a task opens it as an editor tab (see task-document.ts). That is the reason
  * a click no longer jumps to the task's first code reference: reading the task is what

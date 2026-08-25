@@ -120,8 +120,8 @@ export class BoardPanel {
         await openReference(message.ref);
         return;
       case 'openTask':
-        // The same command the sidebar uses to open `task:/<id>.md` — see PLAN.md
-        // § Task detail: the board does not build a second editing surface.
+        // The same command the sidebar uses to open `task:/<id>.md`. The board does
+        // not build a second editing surface.
         await vscode.commands.executeCommand('taskTracker.openTask', message.id, message.title);
         return;
       case 'move':

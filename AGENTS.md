@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Guidance for coding agents working in this repo. Read this before writing code, and read
-[PLAN.md](PLAN.md) before making any decision that touches architecture or the data model.
+Guidance for coding agents working in this repo. Read this before writing code. It is the source
+of truth for architecture and the data model.
 
 ---
 
@@ -10,8 +10,6 @@ Guidance for coding agents working in this repo. Read this before writing code, 
 A per-project kanban board that coding agents and humans edit through one plain-text task store.
 Three parts: a **core library** that owns the data, a **CLI** that is the only thing allowed to
 touch the store, and a **VSCode extension** that renders a board by shelling out to that CLI.
-
-Full design, rationale, component breakdown and phasing: **[PLAN.md](PLAN.md)**.
 
 ## Where the work is
 
@@ -54,8 +52,8 @@ or `npm run watch -w @task-tracker/cli` for a rebuild loop.
 ## Repo map
 
 ```
-PLAN.md                       the design. The source of truth for decisions.
-AGENTS.md                     this file. How to work here.
+AGENTS.md                     this file. How to work here, and the source of truth for
+                              architecture and data-model decisions.
 .claude/skills/tasks/         the skill that teaches agents to USE the tool (not build it).
                               Compiled into the tasks binary and installed by `tasks init`.
                               This is the master copy — edit it here, never in ~/.claude.
@@ -186,15 +184,14 @@ A change is done when all of the following are true. Do not report completion ot
 2. New behaviour has tests. Core logic in particular: ranks, ids, validation and round-tripping
    are exactly where silent bugs live.
 3. No boundary above was crossed.
-4. If a decision in PLAN.md changed, PLAN.md was updated in the same change.
+4. If an architecture or data-model decision changed, AGENTS.md was updated in the same change.
 5. If the CLI's interface changed, `.claude/skills/tasks/SKILL.md` was updated to match. That file
    is the contract agents rely on; the two drift apart the moment you forget. It is compiled
    into the binary, so a stale skill ships to every project the user initialises.
 
 ## Watch out for
 
-The four failure modes this design is most exposed to, expanded in
-[PLAN.md § What will bite](PLAN.md#what-will-bite):
+The four failure modes this design is most exposed to:
 
 - **Rank exhaustion** — midpoint insertion runs out of room. Needs a renumbering trigger from day one.
 - **Schema drift** — agents adding fields. Reject unknown keys.

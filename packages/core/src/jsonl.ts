@@ -21,7 +21,7 @@ import type { StatusPosition, TaskDraft, TaskFilter, TaskPatch, TaskStore } from
  * renames it over the real one. Rename is atomic on every platform we care about, so a
  * crash or a second writer landing mid-save can never leave a half-written store — the
  * worst case is that one of two concurrent writes is lost, which is the last-write-wins
- * behaviour PLAN.md accepts.
+ * behaviour this design accepts.
  *
  * **Canonical order.** Lines are sorted by column then rank, and fields are written in
  * a fixed order. That makes the file readable top-to-bottom, keeps diffs meaningful,
@@ -480,7 +480,7 @@ function resolveNeighbours(
 /**
  * Rebuilds the ranks of any column whose keys have grown past the limit.
  *
- * This is the renumbering trigger PLAN.md calls for. It runs on every write, which is
+ * This is the renumbering trigger rank exhaustion needs. It runs on every write, which is
  * cheap because the check is a length comparison and the rebuild almost never fires.
  */
 function renumberExhaustedColumns(tasks: readonly Task[], statuses: readonly string[]): Task[] {

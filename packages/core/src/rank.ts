@@ -8,7 +8,7 @@
  * rewrite the column.
  *
  * The cost is key length. Repeatedly inserting into the same gap grows keys by a
- * character at a time, which is the "rank exhaustion" failure mode in PLAN.md. It is
+ * character at a time — the "rank exhaustion" failure mode AGENTS.md warns about. It is
  * handled by `needsRenumber` + `renumberRanks`, which callers must check after a
  * write rather than waiting for keys to become absurd.
  *

@@ -6,10 +6,9 @@ import { DEFAULT_STATUSES } from './task.ts';
 /**
  * The project's own config: `.tasks/config.json`, beside the store it configures.
  *
- * It holds the ID prefix and the counter that mints the next number (PLAN.md § Decisions
- * already locked, "Task IDs": the counter is monotonic and never derived from the tasks
- * present, so a number retired by deleting a task never comes back pointing at something
- * else), plus the project's ordered status list — the columns of the board, validated
+ * It holds the ID prefix and the counter that mints the next number (the counter is
+ * monotonic and never derived from the tasks present, so a number retired by deleting a
+ * task never comes back pointing at something else), plus the project's ordered status list — the columns of the board, validated
  * against here rather than against a compile-time enum.
  */
 
