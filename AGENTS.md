@@ -22,6 +22,13 @@ touch the store, and a **VSCode extension** that renders a board by shelling out
 To try it: press F5, or run the "Run the Task Tracker extension" launch configuration. That opens
 a development host; run `Task Tracker: Open Board` in it with a project folder open.
 
+## Vocabulary
+
+[CONTEXT-MAP.md](CONTEXT-MAP.md) points at a `CONTEXT.md` per package. Each one is a glossary
+and nothing more. What a term means, and which word to use when several are available. Read the
+one for the package you are working in before you name anything new. Architecture goes here, not
+there.
+
 ## Commands
 
 ```bash
@@ -44,8 +51,9 @@ or `npm run watch -w @task-tracker/cli` for a rebuild loop.
 This map lists the key directories and their purpose. To be used as a rough guide to the codebase.
 
 When adding to or updating this map:
- - do not list or describe specific files
- - avoid describing specific boundaries - add those instead to the boundaries section below
+
+- do not list or describe specific files
+- avoid describing specific boundaries - add those instead to the boundaries section below
 
 - **`packages/core/`** — the data model and the store behind it: the `Task` shape, validation,
   fractional ranks, ID minting, per-project config, and the JSONL implementation of `TaskStore`.
@@ -65,6 +73,10 @@ When adding to or updating this map:
 - **`.claude/skills/tasks/`** — the skill that teaches agents to _use_ the tool, not to build it.
   Compiled into the `tasks` binary and installed by `tasks init`. Boundary 10.
 - **`.tasks/`** — this repo's own board, kept by the tool itself.
+- **`docs/adr/`** — why the architecture is the shape it is. Numbered, short, and appended to
+  rather than rewritten.
+- **`CONTEXT-MAP.md`** and the `CONTEXT.md` beside each package — the project's language.
+  Glossaries, with no implementation detail in them. See Vocabulary above.
 - **`AGENTS.md`** — this file. How to work here, and the source of truth for architecture and
   data-model decisions.
 
@@ -72,67 +84,89 @@ When adding to or updating this map:
 
 ## Stack decisions
 
-Made deliberately. Change them only with a stated reason, and update this table when you do.
+Each has an ADR recording why. Change one only with a stated reason, and supersede its ADR when
+you do.
 
-| Choice     | What                                                                                  | Why                                                                                                                                                                                                                          |
-| ---------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Language   | TypeScript, `strict` plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` | The VSCode extension host runs JS, so this was effectively forced. The extra strictness is cheap insurance in a repo where agents write most of the code.                                                                    |
-| Runtime    | Node ≥ 22.18                                                                          | Native TS type-stripping means tests run straight from `.ts` with no transform step.                                                                                                                                         |
-| Packages   | npm workspaces                                                                        | Ships with Node, no extra install, and no symlink layouts that trip up `vsce package`. pnpm would be marginally better and is not worth the friction.                                                                        |
-| Build      | esbuild                                                                               | Bundling is required for the extension anyway; using it for the CLI too keeps one tool and makes `tasks` start fast.                                                                                                         |
-| Tests      | `node --test`                                                                         | Built in. Zero dependencies for the thing that must never rot.                                                                                                                                                               |
-| Lint       | none — Prettier only                                                                  | `strict` TS catches most of what ESLint would, and ESLint config is ongoing maintenance nobody here will do. Reconsider if real bugs slip through.                                                                           |
-| Webview UI | vanilla TS                                                                            | Four columns and a detail panel. A framework's styling layer fights VSCode theme inheritance more than it helps. If phase 4 state handling gets genuinely hairy, Preact is the escape hatch — say so before reaching for it. |
-
-**Dependencies:** the runtime dependency count is currently zero and that is a feature. Before
-adding one, check whether Node's standard library covers it. If you add a dependency, say why in
-the commit.
+| Choice     | What                                                                                  | ADR                                                        |
+| ---------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Language   | TypeScript, `strict` plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` | [0012](docs/adr/0012-typescript-run-directly-on-node.md)   |
+| Runtime    | Node ≥ 22.18, running `.ts` with no transform step                                    | [0012](docs/adr/0012-typescript-run-directly-on-node.md)   |
+| Packages   | npm workspaces                                                                        | [0013](docs/adr/0013-npm-workspaces-over-pnpm.md)          |
+| Build      | esbuild, for the two shipped bundles only                                             | [0012](docs/adr/0012-typescript-run-directly-on-node.md)   |
+| Tests      | `node --test`                                                                         | [0016](docs/adr/0016-zero-runtime-dependencies.md)         |
+| Lint       | none — Prettier only                                                                  | [0014](docs/adr/0014-prettier-only-no-eslint.md)           |
+| Webview UI | vanilla TS                                                                            | [0015](docs/adr/0015-vanilla-typescript-in-the-webview.md) |
+| Deps       | zero at runtime                                                                       | [0016](docs/adr/0016-zero-runtime-dependencies.md)         |
 
 ---
 
 ## Boundaries that must not be crossed
 
-These are the architecture. Violating one silently is worse than not doing the task.
+These are the architecture. Violating one silently is worse than not doing the task. The rule is
+here. The argument for it is in the linked ADR.
 
 1. **Only `@task-tracker/core` touches the store.** No other package reads or writes
    `.tasks/tasks.jsonl`. Not the CLI directly, not the extension, not a test helper.
+   ([ADR 0002](docs/adr/0002-core-owns-the-store-behind-an-interface.md))
 
 2. **The extension never imports `@task-tracker/core`.** It reaches task data only by spawning the
-   CLI and parsing `--json` output. This is why the extension can stay CommonJS while core and
-   CLI are ESM, and it is what keeps compiled dependencies out of the extension host. If you find
-   yourself adding core to the extension's dependencies, stop.
+   CLI and parsing `--json` output. If you find yourself adding core to the extension's
+   dependencies, stop. ([ADR 0004](docs/adr/0004-the-extension-shells-out-to-the-cli.md))
 
 3. **The extension host holds no task logic.** No parsing, no validation, no rank arithmetic. It
    spawns, marshals, watches, and renders. Logic belongs in core.
+   ([ADR 0004](docs/adr/0004-the-extension-shells-out-to-the-cli.md))
 
 4. **The webview has no filesystem or Node access.** It talks to the host over `postMessage` and
    nothing else. Every mutation is a request to the host, which spawns the CLI.
+   ([ADR 0003](docs/adr/0003-the-cli-is-the-only-writer.md),
+   [0004](docs/adr/0004-the-extension-shells-out-to-the-cli.md))
 
 5. **Callers depend on the `TaskStore` interface, never a concrete store.** The JSONL
-   implementation is an implementation detail. This is what keeps the SQLite swap contained.
+   implementation is an implementation detail.
+   ([ADR 0002](docs/adr/0002-core-owns-the-store-behind-an-interface.md))
 
 6. **Unknown fields are rejected, loudly.** Validation must fail on keys it does not recognise
    rather than storing them. Agents will invent plausible-looking fields; the schema is the
-   defence.
+   defence. ([ADR 0006](docs/adr/0006-ten-fixed-fields-unknown-keys-rejected.md))
 
-7. **`BoardTask` in `protocol.ts` is a deliberate duplicate of the core `Task` type.** It
-   describes the CLI's JSON output, which is all the extension is allowed to know. Do not
+7. **`BoardTask` in `protocol.ts` is a deliberate duplicate of the core `Task` type.** Do not
    "fix" the duplication by importing core — that is boundary 2, and the duplication is its
    visible price. When the CLI's JSON changes, change this by hand.
+   ([ADR 0004](docs/adr/0004-the-extension-shells-out-to-the-cli.md))
 
 8. **Anything writing outside the project must say so.** `tasks init` installs a skill into
    `~/.claude/skills`. Tests must redirect that with `CLAUDE_SKILLS_DIR` — a test run wrote
    into a real home directory once, before `run.test.ts` isolated it.
+   ([ADR 0017](docs/adr/0017-the-agent-skill-ships-inside-the-binary.md))
 
-9. **The extension package must not declare `"type": "module"`.** Its bundle is CommonJS
-   because the VSCode extension host expects it, and a `.js` file in a `"type": "module"`
-   package is loaded as ESM. Running `node --test` over the extension's `.ts` sources prints a
-   MODULE_TYPELESS_PACKAGE_JSON warning because of this; the warning is the correct trade and
-   must not be silenced that way.
+9. **The extension package must not declare `"type": "module"`.** The
+   MODULE_TYPELESS_PACKAGE_JSON warning from `node --test` is the correct trade and must not be
+   silenced that way. ([ADR 0005](docs/adr/0005-the-extension-bundle-stays-commonjs.md))
 
 10. **`.claude/skills/tasks/` is the master copy of the agent skill.** Edit it there, never in
-    `~/.claude/skills`. The CLI bundles this copy into the binary and `tasks init` writes it back
-    out, so an edit made in the installed location is silently overwritten on the next install.
+    `~/.claude/skills` — an edit made in the installed location is silently overwritten on the
+    next install. ([ADR 0017](docs/adr/0017-the-agent-skill-ships-inside-the-binary.md))
+
+---
+
+## Decisions
+
+The rules above are the enforceable half. [`docs/adr/`](docs/adr/) holds the reasoning, and the
+data-model decisions that have no boundary to enforce them.
+
+- [0007](docs/adr/0007-fractional-base62-ranks.md) fractional ranks
+- [0008](docs/adr/0008-task-ids-are-prefix-and-counter.md) id minting
+- [0009](docs/adr/0009-tasks-open-as-editor-tabs-not-files.md) tasks as editor tabs
+- [0010](docs/adr/0010-task-documents-are-not-yaml.md) the task document format
+- [0011](docs/adr/0011-filter-and-sort-are-view-state.md) filter and sort as view state
+
+Start at [0001](docs/adr/0001-tasks-are-local-working-memory.md). Tasks are one person's local
+working memory, and every other decision assumes it.
+
+Add an ADR when a decision is hard to reverse, would look surprising without the context, and
+came out of a real trade-off. Missing any of those three, it belongs in a code comment
+instead.
 
 ---
 
@@ -157,10 +191,14 @@ A change is done when all of the following are true. Do not report completion ot
 2. New behaviour has tests. Core logic in particular: ranks, ids, validation and round-tripping
    are exactly where silent bugs live.
 3. No boundary above was crossed.
-4. If an architecture or data-model decision changed, AGENTS.md was updated in the same
-   change. Likewise if a directory was added, removed, or changed purpose — the Repo map is
-   only true because updating it is part of done.
-5. If the CLI's interface changed, `.claude/skills/tasks/SKILL.md` was updated to match. That file
+4. If an architecture or data-model decision changed, AGENTS.md was updated in the same change,
+   and a new ADR was added under `docs/adr/` where the decision meets the bar in Decisions.
+   Reversing an earlier decision supersedes its ADR rather than editing it away. Likewise if a
+   directory was added, removed, or changed purpose. The Repo map is only true because updating
+   it is part of done.
+5. If a term changed meaning, gained a better name, or was invented, the relevant `CONTEXT.md`
+   was updated in the same change. A stale glossary is worse than no glossary.
+6. If the CLI's interface changed, `.claude/skills/tasks/SKILL.md` was updated to match. That file
    is the contract agents rely on; the two drift apart the moment you forget. It is compiled
    into the binary, so a stale skill ships to every project the user initialises.
 
