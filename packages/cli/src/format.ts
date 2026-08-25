@@ -1,5 +1,4 @@
-import type { Task, TaskStatus } from '@task-tracker/core';
-import { TASK_STATUSES } from '@task-tracker/core';
+import type { Task } from '@task-tracker/core';
 
 /**
  * Output formatting.
@@ -12,13 +11,14 @@ import { TASK_STATUSES } from '@task-tracker/core';
  * Compact output stays on one line per task so `tasks list | grep` behaves.
  */
 
-const STATUS_WIDTH = Math.max(...TASK_STATUSES.map((status) => status.length));
-
 /** One task, one line: id, status, category, title, tags. */
-export function formatLine(task: Task, widths: { id: number; category: number }): string {
+export function formatLine(
+  task: Task,
+  widths: { id: number; status: number; category: number },
+): string {
   const parts = [
     task.id.padEnd(widths.id),
-    task.status.padEnd(STATUS_WIDTH),
+    task.status.padEnd(widths.status),
     task.category.padEnd(widths.category),
     task.title,
   ];
@@ -29,18 +29,23 @@ export function formatLine(task: Task, widths: { id: number; category: number })
 
 export function formatList(tasks: readonly Task[]): string {
   if (tasks.length === 0) return '';
+  // Widths come from the rows on screen, so a status named anything still lines up.
   const widths = {
     id: Math.max(...tasks.map((task) => task.id.length)),
+    status: Math.max(...tasks.map((task) => task.status.length)),
     category: Math.max(...tasks.map((task) => task.category.length)),
   };
   return tasks.map((task) => formatLine(task, widths)).join('\n');
 }
 
-/** A count per column, for the empty case and for `tasks list` with no filter. */
-export function formatSummary(tasks: readonly Task[]): string {
-  const counts = new Map<TaskStatus, number>(TASK_STATUSES.map((status) => [status, 0]));
+/**
+ * A count per column, for the empty case and for `tasks list` with no filter. The columns
+ * and their order are the project's own, passed in rather than assumed.
+ */
+export function formatSummary(tasks: readonly Task[], statuses: readonly string[]): string {
+  const counts = new Map<string, number>(statuses.map((status) => [status, 0]));
   for (const task of tasks) counts.set(task.status, (counts.get(task.status) ?? 0) + 1);
-  return TASK_STATUSES.map((status) => `${status} ${counts.get(status)}`).join('  ·  ');
+  return statuses.map((status) => `${status} ${counts.get(status) ?? 0}`).join('  ·  ');
 }
 
 /** One task in full, for `tasks show`. */

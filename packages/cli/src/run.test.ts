@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import type { Task } from '@task-tracker/core';
+import { DEFAULT_STATUSES, readConfig, sanitizePrefix } from '@task-tracker/core';
 import { EXIT_FAILED, EXIT_OK, EXIT_USAGE, run } from './run.ts';
 
 let project: string;
@@ -38,6 +39,18 @@ async function tasks(...argv: string[]): Promise<Result> {
   const out: string[] = [];
   const err: string[] = [];
   const code = await run(argv, { out: (t) => out.push(t), err: (t) => err.push(t) }, project);
+  return { code, out: out.join('\n'), err: err.join('\n') };
+}
+
+/** The same, with a document on stdin — the shape `update --markdown` expects. */
+async function withInput(stdin: string, ...argv: string[]): Promise<Result> {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = await run(
+    argv,
+    { out: (t) => out.push(t), err: (t) => err.push(t), input: () => Promise.resolve(stdin) },
+    project,
+  );
   return { code, out: out.join('\n'), err: err.join('\n') };
 }
 
@@ -120,13 +133,67 @@ describe('init', () => {
     await ok('init');
     assert.match((await ok('init')).out, /already exists/);
   });
+
+  it('defaults the prefix to the project directory name', async () => {
+    const result = await ok('init');
+    assert.match(result.out, /Using task ID prefix/);
+    assert.deepEqual(await readConfig(join(project, '.tasks')), {
+      prefix: sanitizePrefix(basename(project)),
+      nextId: 1,
+      statuses: [...DEFAULT_STATUSES],
+    });
+  });
+
+  it('accepts an explicit --prefix', async () => {
+    await ok('init', '--prefix=tt');
+    assert.deepEqual(await readConfig(join(project, '.tasks')), {
+      prefix: 'tt',
+      nextId: 1,
+      statuses: [...DEFAULT_STATUSES],
+    });
+  });
+
+  it('accepts -p as shorthand for --prefix', async () => {
+    await ok('init', '-p', 'tt');
+    assert.deepEqual(await readConfig(join(project, '.tasks')), {
+      prefix: 'tt',
+      nextId: 1,
+      statuses: [...DEFAULT_STATUSES],
+    });
+  });
+
+  it('sanitises an explicit prefix', async () => {
+    await ok('init', '--prefix=My Cool Repo!!');
+    assert.deepEqual(await readConfig(join(project, '.tasks')), {
+      prefix: 'my-cool-repo',
+      nextId: 1,
+      statuses: [...DEFAULT_STATUSES],
+    });
+  });
+
+  it('rejects a --prefix with a digit-only segment', async () => {
+    const result = await tasks('init', '--prefix=foo-2');
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /digit/);
+  });
+
+  it('does not let a repeat init change the prefix', async () => {
+    await ok('init', '--prefix=tt');
+    const result = await ok('init', '--prefix=other');
+    assert.match(result.out, /set once/);
+    assert.deepEqual(await readConfig(join(project, '.tasks')), {
+      prefix: 'tt',
+      nextId: 1,
+      statuses: [...DEFAULT_STATUSES],
+    });
+  });
 });
 
 describe('add', () => {
   it('defaults status to backlog and reports the new ID', async () => {
     await ok('init');
     const result = await ok('add', 'Something to do');
-    assert.match(result.out, /^Added t[0-9a-z]{8} {2}Something to do {2}\(backlog\)$/);
+    assert.match(result.out, /^Added [a-z][a-z0-9-]*-\d+ {2}Something to do {2}\(backlog\)$/);
   });
 
   it('joins an unquoted title rather than truncating it', async () => {
@@ -265,6 +332,88 @@ describe('update', () => {
   });
 });
 
+describe('the markdown document', () => {
+  it('shows a task as a document and reads the same document back', async () => {
+    await seed();
+    const id = await idOf('Fix auth');
+    await ok('note', id, 'Root cause: double encoding.');
+
+    const document = (await ok('show', id, '--markdown')).out;
+    assert.match(document, new RegExp(`^---\\nid: ${id}\\n`));
+    assert.match(document, /^title: Fix auth redirect loop$/m);
+    assert.match(document, /^tags: \[bug, frontend\]$/m);
+    assert.match(document, /Root cause: double encoding\./);
+
+    // Unchanged in, unchanged out: a save with no edits must not rewrite anything.
+    const before = await json<Task[]>('show', id);
+    await withInput(document, 'update', id, '--markdown');
+    const after = await json<Task[]>('show', id);
+    assert.deepEqual({ ...after, updated: '' }, { ...before, updated: '' });
+  });
+
+  it('applies edits to every field the document carries', async () => {
+    await seed();
+    const id = await idOf('Fix auth');
+    const edited = [
+      '---',
+      `id: ${id}`,
+      'title: Fix the redirect loop',
+      'status: in-progress',
+      'category: auth',
+      'tags: [bug, urgent]',
+      'refs:',
+      '  - src/auth.ts:42-58',
+      '---',
+      '',
+      'Unwrap redirectTo once.',
+    ].join('\n');
+
+    assert.equal((await withInput(edited, 'update', id, '--markdown')).code, EXIT_OK);
+
+    const task = await json<Task>('show', id);
+    assert.equal(task.title, 'Fix the redirect loop');
+    assert.equal(task.status, 'in-progress');
+    assert.deepEqual(task.tags, ['bug', 'urgent']);
+    assert.deepEqual(task.refs, ['src/auth.ts:42-58']);
+    assert.equal(task.notes, 'Unwrap redirectTo once.');
+  });
+
+  it('refuses a document belonging to another task', async () => {
+    await seed();
+    const mine = await idOf('Fix auth');
+    const theirs = await idOf('Rate limit');
+    const document = (await ok('show', theirs, '--markdown')).out;
+
+    const result = await withInput(document, 'update', mine, '--markdown');
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, new RegExp(`document is task '${theirs}'`));
+  });
+
+  it('refuses to mix the document with field flags', async () => {
+    await seed();
+    const id = await idOf('Fix auth');
+    const result = await withInput('---\ntitle: t\n---\n', 'update', id, '--markdown', '--tags=x');
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /--tags/);
+  });
+
+  it('rejects a bad document without touching the task', async () => {
+    await seed();
+    const id = await idOf('Fix auth');
+    const before = await json<Task>('show', id);
+
+    const result = await withInput(
+      `---\nid: ${id}\nassignee: me\n---\n`,
+      'update',
+      id,
+      '--markdown',
+    );
+    assert.equal(result.code, EXIT_FAILED);
+    assert.match(result.err, /assignee/);
+    assert.deepEqual(await json<Task>('show', id), before);
+  });
+});
+
 describe('note', () => {
   it('appends rather than replacing', async () => {
     await seed();
@@ -322,16 +471,162 @@ describe('move', () => {
 });
 
 describe('remove', () => {
-  it('deletes the task and names what went', async () => {
+  it('deletes the task once confirmed on stdin', async () => {
     await seed();
-    const result = await ok('remove', await idOf('Rate limit'));
+    const id = await idOf('Rate limit');
+    const result = await withInput('y\n', 'remove', id);
+    assert.equal(result.code, EXIT_OK, result.err);
+    assert.match(result.out, /Remove .*Rate limit the API\?/);
     assert.match(result.out, /Removed .*Rate limit the API/);
     assert.equal((await json<Task[]>('list')).length, 2);
   });
 
+  it('leaves the task alone when declined', async () => {
+    await seed();
+    const id = await idOf('Rate limit');
+    const result = await withInput('n\n', 'remove', id);
+    assert.equal(result.code, EXIT_OK, result.err);
+    assert.match(result.out, /Aborted/);
+    assert.equal((await json<Task[]>('list')).length, 3);
+  });
+
+  it('deletes without asking when forced', async () => {
+    await seed();
+    const id = await idOf('Rate limit');
+    const result = await ok('remove', id, '--force');
+    assert.match(result.out, /Removed .*Rate limit the API/);
+    assert.equal((await json<Task[]>('list')).length, 2);
+  });
+
+  it('refuses to delete when there is no confirmation available and no --force', async () => {
+    await seed();
+    const id = await idOf('Rate limit');
+    const result = await tasks('remove', id);
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /--force/);
+    assert.equal((await json<Task[]>('list')).length, 3, 'nothing must be removed');
+  });
+
   it('reports an unknown ID', async () => {
     await seed();
-    assert.equal((await tasks('remove', 'tzzzzzzzz')).code, EXIT_FAILED);
+    assert.equal((await tasks('remove', 'tzzzzzzzz', '--force')).code, EXIT_FAILED);
+  });
+});
+
+describe('bare number ids', () => {
+  it("resolves a bare number to this project's prefix", async () => {
+    await ok('init', '--prefix=tt');
+    const created = await json<Task>('add', 'Something');
+    const [n] = created.id.split('-').slice(-1);
+
+    const byNumber = await json<Task>('show', n!);
+    assert.equal(byNumber.id, created.id);
+  });
+
+  it('works for move, note and remove too', async () => {
+    await ok('init', '--prefix=tt');
+    const created = await json<Task>('add', 'Something');
+    const n = created.id.split('-').at(-1)!;
+
+    await ok('move', n, 'priority');
+    await ok('note', n, 'a finding');
+    assert.equal((await json<Task>('show', n)).status, 'priority');
+
+    const result = await ok('remove', n, '--force');
+    assert.match(result.out, /Removed/);
+  });
+
+  it("refuses an id qualified with a different project's prefix", async () => {
+    await ok('init', '--prefix=tt');
+    const result = await tasks('show', 'other-3');
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /different project/);
+  });
+
+  it('passes a legacy-shaped id through unchanged, so pre-migration ids still resolve', async () => {
+    await ok('init', '--prefix=tt');
+    const result = await tasks('show', 't1ep9qf7v');
+    assert.equal(result.code, EXIT_FAILED, 'a literal miss, not a usage error');
+  });
+});
+
+describe('migrate-ids', () => {
+  async function seedLegacyStore(): Promise<void> {
+    await mkdir(join(project, '.tasks'), { recursive: true });
+    const older = {
+      id: 't1ep9qf7v',
+      title: 'Older task',
+      notes: 'See also t4cygkdpg.',
+      category: '',
+      tags: [],
+      status: 'backlog',
+      rank: 'V',
+      created: '2026-08-19T10:00:00.000Z',
+      updated: '2026-08-19T10:00:00.000Z',
+      refs: [],
+    };
+    const newer = {
+      ...older,
+      id: 't4cygkdpg',
+      title: 'Newer task, references t1ep9qf7v',
+      notes: '',
+      created: '2026-08-20T10:00:00.000Z',
+      updated: '2026-08-20T10:00:00.000Z',
+    };
+    await writeFile(
+      join(project, '.tasks', 'tasks.jsonl'),
+      `${JSON.stringify(older)}\n${JSON.stringify(newer)}\n`,
+    );
+  }
+
+  it('refuses to read a legacy store until migrated', async () => {
+    await seedLegacyStore();
+    const result = await tasks('list');
+    assert.equal(result.code, EXIT_FAILED);
+    assert.match(result.err, /migrate-ids/);
+  });
+
+  it('converts every id and prints the mapping', async () => {
+    await seedLegacyStore();
+    const result = await ok('migrate-ids', '--prefix=tt');
+    assert.match(result.out, /Migrated 2 tasks to prefix 'tt'/);
+    assert.match(result.out, /t1ep9qf7v.*tt-1/);
+    assert.match(result.out, /t4cygkdpg.*tt-2/);
+
+    const listed = await json<Task[]>('list');
+    const newer = listed.find((task) => task.title.startsWith('Newer'))!;
+    assert.equal(newer.title, 'Newer task, references tt-1');
+  });
+
+  it('is a no-op the second time', async () => {
+    await seedLegacyStore();
+    await ok('migrate-ids', '--prefix=tt');
+    const result = await ok('migrate-ids', '--prefix=tt');
+    assert.match(result.out, /Nothing to migrate/);
+  });
+
+  it('defaults to the prefix already on record, not the repo name', async () => {
+    await seedLegacyStore();
+    await ok('migrate-ids', '--prefix=tt');
+    await writeFile(
+      join(project, '.tasks', 'tasks.jsonl'),
+      `${(await readFile(join(project, '.tasks', 'tasks.jsonl'), 'utf8')).trimEnd()}\n${JSON.stringify(
+        {
+          id: 't7r278yn3',
+          title: 'Third, still legacy',
+          notes: '',
+          category: '',
+          tags: [],
+          status: 'backlog',
+          rank: 'z',
+          created: '2026-08-21T10:00:00.000Z',
+          updated: '2026-08-21T10:00:00.000Z',
+          refs: [],
+        },
+      )}\n`,
+    );
+    const result = await ok('migrate-ids');
+    assert.match(result.out, /prefix 'tt'/);
   });
 });
 
@@ -376,5 +671,75 @@ describe('the shell contract', () => {
     );
     assert.equal(code, EXIT_OK);
     assert.match(out.join('\n'), /Fix auth redirect loop/);
+  });
+});
+
+describe('status', () => {
+  it('lists the project statuses, and as JSON', async () => {
+    await ok('init');
+    assert.equal((await ok('status', 'list')).out, DEFAULT_STATUSES.join('\n'));
+    assert.deepEqual(await json<string[]>('status', 'list'), [...DEFAULT_STATUSES]);
+    // Bare `tasks status` behaves as `status list`.
+    assert.equal((await ok('status')).out, DEFAULT_STATUSES.join('\n'));
+  });
+
+  it('adds a status, then lets a task be put in it', async () => {
+    await ok('init');
+    const added = await ok('status', 'add', 'review', '--after=in-progress');
+    assert.match(added.out, /Added status 'review'/);
+    assert.deepEqual(await json<string[]>('status', 'list'), [
+      'backlog',
+      'priority',
+      'in-progress',
+      'review',
+      'done',
+    ]);
+
+    // The CLI now accepts the new column where it would have rejected it before.
+    await ok('add', 'Look at the PR', '--status=review');
+    const [task] = await json<Task[]>('list', '--status=review');
+    assert.equal(task!.status, 'review');
+    await ok('move', task!.id, 'done');
+    assert.equal((await json<Task[]>('list', '--status=done'))[0]!.id, task!.id);
+  });
+
+  it('renames a status and carries its tasks with it', async () => {
+    await ok('init');
+    await ok('add', 'A task', '--status=priority');
+    await ok('status', 'rename', 'priority', 'next-up');
+    const [task] = await json<Task[]>('list', '--status=next-up');
+    assert.equal(task!.title, 'A task');
+  });
+
+  it('reorders a status', async () => {
+    await ok('init');
+    await ok('status', 'reorder', 'done', '--before=backlog');
+    assert.deepEqual(await json<string[]>('status', 'list'), [
+      'done',
+      'backlog',
+      'priority',
+      'in-progress',
+    ]);
+  });
+
+  it('refuses to remove a non-empty status without --move-to, then obeys it', async () => {
+    await ok('init');
+    await ok('add', 'Stuck task', '--status=priority');
+
+    const refused = await tasks('status', 'remove', 'priority');
+    assert.equal(refused.code, EXIT_FAILED);
+    assert.match(refused.err, /still holds 1 task/);
+
+    await ok('status', 'remove', 'priority', '--move-to=backlog');
+    assert.ok(!(await json<string[]>('status', 'list')).includes('priority'));
+    const [task] = await json<Task[]>('list', '--status=backlog');
+    assert.equal(task!.title, 'Stuck task');
+  });
+
+  it('reports an unknown subcommand as a usage error', async () => {
+    await ok('init');
+    const result = await tasks('status', 'frobnicate');
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /not a subcommand/);
   });
 });

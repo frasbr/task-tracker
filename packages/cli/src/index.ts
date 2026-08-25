@@ -12,6 +12,14 @@ process.exitCode = await run(
   {
     out: (text) => process.stdout.write(`${text}\n`),
     err: (text) => process.stderr.write(`${text}\n`),
+    input: readStdin,
   },
   process.cwd(),
 );
+
+/** Only `update --markdown` asks for this, so nothing reads the stream until it does. */
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString('utf8');
+}

@@ -14,7 +14,7 @@ export class UsageError extends Error {
   override readonly name = 'UsageError';
 }
 
-const BOOLEAN_FLAGS = new Set(['json', 'help', 'version', 'skip-skill']);
+const BOOLEAN_FLAGS = new Set(['json', 'help', 'version', 'skip-skill', 'markdown', 'force']);
 
 export interface ParsedArgs {
   command: string | undefined;
@@ -49,6 +49,14 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       const dir = argv[i + 1];
       if (dir === undefined) throw new UsageError('-C needs a directory.');
       flags.set('C', dir);
+      i += 1;
+      continue;
+    }
+
+    if (token === '-p') {
+      const prefix = argv[i + 1];
+      if (prefix === undefined) throw new UsageError('-p needs a value, as -p <prefix>.');
+      flags.set('prefix', prefix);
       i += 1;
       continue;
     }
