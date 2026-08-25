@@ -1,19 +1,22 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
-import { listTasks } from './cli.ts';
-import { parseRef } from './interpret.ts';
-import type { FromWebview, ToWebview } from './protocol.ts';
+import { loadBoard, moveTask } from './cli.ts';
+import { describeProblem, parseRef } from './interpret.ts';
+import type { BoardStatus, FromWebview, ToWebview } from './protocol.ts';
 
 /**
  * The board panel: webview lifecycle, and the marshalling between it and the CLI.
  *
  * Holds no task logic. It asks the CLI for JSON, forwards it, and turns a click on a
- * code reference into an editor. Anything that looks like reasoning about tasks belongs
- * in core, reached through the CLI.
+ * code reference into an editor, a drop into a `tasks move`, and a card click or "+"
+ * into the same commands the sidebar uses. Anything that looks like reasoning about
+ * tasks belongs in core, reached through the CLI.
  *
- * Phase 3 is read-only, so the board refreshes when you ask it to and when it becomes
- * visible again. The file watcher that makes an agent's writes appear on their own is
- * phase 4.
+ * Refreshes on request, when the panel becomes visible again, after a drag persists,
+ * and — via `refreshCurrent`, called by store-watcher.ts — whenever the store changes
+ * on disk. The webview itself defers a store-driven refresh while a drag is in
+ * progress (see webview/main.ts) rather than this class suppressing the watcher, so a
+ * concurrent external write cannot yank a card out from under the cursor either.
  */
 
 export const BOARD_VIEW_TYPE = 'taskTracker.board';
@@ -43,6 +46,11 @@ export class BoardPanel {
     });
 
     BoardPanel.#current = new BoardPanel(panel, extensionUri);
+  }
+
+  /** Refreshes the open panel, if there is one. A no-op with nothing open to refresh. */
+  static refreshCurrent(): void {
+    void BoardPanel.#current?.refresh();
   }
 
   /** Reattaches to a panel VSCode restored from a previous session. */
@@ -89,10 +97,15 @@ export class BoardPanel {
       return;
     }
 
-    const result = await listTasks(folder.uri.fsPath);
+    const result = await loadBoard(folder.uri.fsPath);
     this.#post(
       result.ok
-        ? { type: 'tasks', tasks: result.value, project: folder.name }
+        ? {
+            type: 'tasks',
+            tasks: result.value.tasks,
+            statuses: result.value.statuses,
+            project: folder.name,
+          }
         : { type: 'problem', problem: result.problem },
     );
   }
@@ -106,7 +119,49 @@ export class BoardPanel {
       case 'openRef':
         await openReference(message.ref);
         return;
+      case 'openTask':
+        // The same command the sidebar uses to open `task:/<id>.md` — see PLAN.md
+        // § Task detail: the board does not build a second editing surface.
+        await vscode.commands.executeCommand('taskTracker.openTask', message.id, message.title);
+        return;
+      case 'move':
+        await this.#move(message);
+        return;
+      case 'createTask':
+        await vscode.commands.executeCommand('taskTracker.createTask', message.status);
+        return;
+      case 'deleteTask':
+        await vscode.commands.executeCommand('taskTracker.deleteTask', message.id);
+        return;
     }
+  }
+
+  /**
+   * Persists a drop through `tasks move`, then re-renders from whatever the store says
+   * — never from what the webview thinks it dropped. A move that the CLI rejects (a
+   * stale neighbour id, say, because someone else just moved that same card) still
+   * refreshes, which is what un-does the webview's optimistic drop animation.
+   */
+  async #move(message: {
+    id: string;
+    status: BoardStatus;
+    before?: string;
+    after?: string;
+  }): Promise<void> {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) return;
+
+    const position: { before?: string; after?: string } = {};
+    if (message.before !== undefined) position.before = message.before;
+    if (message.after !== undefined) position.after = message.after;
+
+    const result = await moveTask(folder.uri.fsPath, message.id, message.status, position);
+    if (!result.ok) {
+      void vscode.window.showWarningMessage(
+        `Task Tracker: could not move that card. ${describeProblem(result.problem).detail}`,
+      );
+    }
+    await this.refresh();
   }
 
   #post(message: ToWebview): void {
@@ -152,7 +207,7 @@ export class BoardPanel {
  * Line information is optional and one-based, matching how the CLI stores it and how
  * every other tool in a terminal prints it.
  */
-async function openReference(ref: string): Promise<void> {
+export async function openReference(ref: string): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) return;
 

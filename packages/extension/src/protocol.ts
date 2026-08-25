@@ -10,9 +10,24 @@
  * If the CLI's JSON changes, this changes with it.
  */
 
-export const BOARD_COLUMNS = ['backlog', 'priority', 'in-progress', 'done'] as const;
+/**
+ * A column name. Per-project now (PLAN.md § Project statuses): the extension no longer
+ * knows the set at compile time — it arrives with each `tasks` message, read from
+ * `tasks status list --json`. So this is a plain string, not a union of four literals.
+ */
+export type BoardStatus = string;
 
-export type BoardStatus = (typeof BOARD_COLUMNS)[number];
+/**
+ * A column's display label, derived from its name rather than looked up in a table —
+ * a status can be called anything, so `in-review` title-cases to "In Review". Names are
+ * validated to hold no whitespace, so hyphens are the only word boundary.
+ */
+export function columnLabel(status: BoardStatus): string {
+  return status
+    .split('-')
+    .map((word) => (word === '' ? word : word[0]!.toUpperCase() + word.slice(1)))
+    .join(' ');
+}
 
 export interface BoardTask {
   id: string;
@@ -27,19 +42,49 @@ export interface BoardTask {
   refs: string[];
 }
 
+/**
+ * The number half of a `<prefix>-<n>` id. Every task in a given view shares one
+ * project's prefix, so a list that showed the qualified id on every row would just be
+ * repeating itself — this is what the sidebar description and card footer show instead.
+ * Falls back to the full id if it does not look like `<prefix>-<n>`, which cannot happen
+ * for a task the CLI produced but is a safe degrade if it ever does.
+ */
+export function idNumber(id: string): string {
+  const match = /-(\d+)$/.exec(id);
+  return match ? match[1]! : id;
+}
+
 /** Why the board has nothing to show. Each maps to its own message in the webview. */
 export type BoardProblem =
   | { kind: 'no-workspace' }
   | { kind: 'no-store'; directory: string }
   | { kind: 'cli-missing'; attempted: string }
+  | { kind: 'cli-outdated'; message: string }
   | { kind: 'cli-failed'; message: string };
 
 /** Host → webview. */
 export type ToWebview =
   | { type: 'loading' }
-  | { type: 'tasks'; tasks: BoardTask[]; project: string }
+  /** `statuses` is the project's ordered column list; the board renders one column each. */
+  | { type: 'tasks'; tasks: BoardTask[]; statuses: BoardStatus[]; project: string }
   | { type: 'problem'; problem: BoardProblem };
 
-/** Webview → host. Phase 3 is read-only, so this is deliberately tiny. */
+/** Webview → host. */
 export type FromWebview =
-  { type: 'ready' } | { type: 'refresh' } | { type: 'openRef'; ref: string };
+  | { type: 'ready' }
+  | { type: 'refresh' }
+  | { type: 'openRef'; ref: string }
+  /** A card was clicked (not dragged, not its delete gesture) — open its document. */
+  | { type: 'openTask'; id: string; title: string }
+  /**
+   * A card was dropped. `status` is the target column; `before`/`after` are the ids
+   * either side of the gap it landed in, at most one of them present — see
+   * `dropTarget` in webview/main.ts for how the gap is read off the rendered column.
+   * Neither present means "append to an empty column". The webview never computes a
+   * rank itself; the host turns this straight into `tasks move`.
+   */
+  | { type: 'move'; id: string; status: BoardStatus; before?: string; after?: string }
+  /** The column's "+" was clicked — create a task landing in that status. */
+  | { type: 'createTask'; status: BoardStatus }
+  /** The card's delete gesture was used. */
+  | { type: 'deleteTask'; id: string };
