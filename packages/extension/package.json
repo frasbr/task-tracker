@@ -12,15 +12,162 @@
   "categories": [
     "Other"
   ],
+  "icon": "media/icon.png",
   "main": "./out/extension.js",
   "activationEvents": [
+    "onStartupFinished",
+    "onView:taskTracker.tasks",
     "onWebviewPanel:taskTracker.board"
   ],
   "contributes": {
     "commands": [
       {
         "command": "taskTracker.openBoard",
-        "title": "Task Tracker: Open Board"
+        "title": "Open Board",
+        "category": "Task Tracker",
+        "icon": {
+          "light": "media/icon-board-light.svg",
+          "dark": "media/icon-board-dark.svg"
+        }
+      },
+      {
+        "command": "taskTracker.openTask",
+        "title": "Open Task",
+        "category": "Task Tracker",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "taskTracker.createTask",
+        "title": "New Task",
+        "category": "Task Tracker",
+        "icon": "$(add)"
+      },
+      {
+        "command": "taskTracker.newItem",
+        "title": "New…",
+        "category": "Task Tracker",
+        "icon": "$(add)"
+      },
+      {
+        "command": "taskTracker.renameStatus",
+        "title": "Rename Column…",
+        "category": "Task Tracker"
+      },
+      {
+        "command": "taskTracker.removeStatus",
+        "title": "Remove Column…",
+        "category": "Task Tracker"
+      },
+      {
+        "command": "taskTracker.deleteTask",
+        "title": "Delete task…",
+        "category": "Task Tracker",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "taskTracker.refreshTasks",
+        "title": "Refresh Tasks",
+        "category": "Task Tracker",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "taskTracker.openRef",
+        "title": "Open Code Reference",
+        "category": "Task Tracker",
+        "icon": "$(references)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "taskTracker.openBoard",
+          "group": "navigation@100"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "taskTracker.newItem",
+          "when": "view == taskTracker.tasks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "taskTracker.openBoard",
+          "when": "view == taskTracker.tasks",
+          "group": "navigation@2"
+        },
+        {
+          "command": "taskTracker.refreshTasks",
+          "when": "view == taskTracker.tasks",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "taskTracker.openTask",
+          "when": "view == taskTracker.tasks && viewItem =~ /^taskTracker\\.task/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "taskTracker.openRef",
+          "when": "view == taskTracker.tasks && viewItem == taskTracker.task.refs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "taskTracker.deleteTask",
+          "when": "view == taskTracker.tasks && viewItem =~ /^taskTracker\\.task/",
+          "group": "z_delete@1"
+        },
+        {
+          "command": "taskTracker.renameStatus",
+          "when": "view == taskTracker.tasks && viewItem == taskTracker.column",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "taskTracker.removeStatus",
+          "when": "view == taskTracker.tasks && viewItem == taskTracker.column",
+          "group": "1_modify@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "taskTracker.openTask",
+          "when": "false"
+        },
+        {
+          "command": "taskTracker.openRef",
+          "when": "false"
+        },
+        {
+          "command": "taskTracker.renameStatus",
+          "when": "false"
+        },
+        {
+          "command": "taskTracker.removeStatus",
+          "when": "false"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "taskTracker",
+          "title": "Task Tracker",
+          "icon": "media/icon-activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "taskTracker": [
+        {
+          "id": "taskTracker.tasks",
+          "name": "Tasks"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "taskTracker.tasks",
+        "contents": "No tasks yet.\n[Open Board](command:taskTracker.openBoard)\nOr add one from a terminal with `tasks add`."
       }
     ],
     "configuration": {
