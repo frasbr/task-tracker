@@ -176,6 +176,7 @@ data-model decisions that have no boundary to enforce them.
 - [0010](docs/adr/0010-task-documents-are-not-yaml.md) the task document format
 - [0011](docs/adr/0011-filter-and-sort-are-view-state.md) filter and sort as view state
 - [0018](docs/adr/0018-plans-live-in-a-numbered-directory.md) plans as numbered documents
+- [0019](docs/adr/0019-statuses-are-per-project.md) statuses as project config
 
 Start at [0001](docs/adr/0001-tasks-are-local-working-memory.md). Tasks are one person's local
 working memory, and every other decision assumes it.
@@ -218,6 +219,32 @@ A change is done when all of the following are true. Do not report completion ot
    `.claude/skills/plans/SKILL.md` too where the change touches plans. Those files are the
    contract agents rely on; they drift apart from the CLI the moment you forget. Both are
    compiled into the binary, so a stale skill ships to every project the user initialises.
+
+## Deliberately not built
+
+Each of these was considered and pushed out. They are here so they do not creep back in as
+unplanned work. Building one is a decision, not a tidy-up.
+
+- **One file per task** — `.tasks/<id>.md` on disk. The editor experience it buys is already
+  covered by the virtual `task:` document, and it costs a route around the CLI's validation, N
+  reads per list, and a migration. Revisit if tasks need editing outside VSCode, or in git.
+- **Subtasks and checklists** — real schema and UI cost. Revisit once the flat model visibly
+  fails.
+- **A status that means "finished"** — marking one column terminal so reports can say what closed
+  this week. Not built, because the moment one name is special, renaming it breaks things
+  quietly ([ADR 0019](docs/adr/0019-statuses-are-per-project.md)). If a feature needs it, add an
+  explicit flag on a status rather than blessing a name.
+- **Conflict resolution** — detecting that a task changed on disk under an open edit.
+  Last-write-wins ships; add the banner if text is actually lost.
+- **Configurable category colours** — the hash-to-palette assignment is stable and free. A picker
+  is a settings surface, a migration on rename, and a decision every time a bucket is added.
+  Revisit if two categories you care about keep colliding.
+- **Cross-project aggregation** — a registry of project paths and one board across repos. The
+  prefixed ids are what make it possible without a rewrite; nothing else is built for it.
+- **MCP server** — a typed-tool front door onto the same core. Worth it only if a client you use
+  handles MCP better than it handles a shell.
+- **SQLite backend** — a contained swap behind `TaskStore`. Genuinely worth doing somewhere north
+  of ten thousand tasks ([ADR 0002](docs/adr/0002-core-owns-the-store-behind-an-interface.md)).
 
 ## Watch out for
 

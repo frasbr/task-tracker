@@ -15,3 +15,8 @@ next one, so every reference to the old task quietly points somewhere else.
 This replaced random `t`-prefixed ids. Those are still recognised, so `tasks migrate-ids` can
 convert an older store and rewrite references to them in task text. Changing a project's prefix
 means running that migration.
+
+Readable ids cost a safety property the opaque ones had for free. Those were built from an
+alphabet without `i`, `l`, `o` or `u`, so a mistyped id failed loudly. `7` and `17` are both
+real, so a slip on a destructive verb now lands somewhere. That is why `remove` confirms what it
+is about to delete unless given `--force`.
