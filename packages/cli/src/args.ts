@@ -14,7 +14,15 @@ export class UsageError extends Error {
   override readonly name = 'UsageError';
 }
 
-const BOOLEAN_FLAGS = new Set(['json', 'help', 'version', 'skip-skill', 'markdown', 'force']);
+const BOOLEAN_FLAGS = new Set([
+  'json',
+  'help',
+  'version',
+  'skip-skill',
+  'skip-plans',
+  'markdown',
+  'force',
+]);
 
 export interface ParsedArgs {
   command: string | undefined;

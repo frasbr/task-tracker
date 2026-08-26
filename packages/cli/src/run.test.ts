@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
@@ -84,23 +84,50 @@ describe('init', () => {
     assert.match(result.out, /Created .*\.tasks/);
   });
 
-  it('installs the agent skill, and says it wrote outside the project', async () => {
+  it('installs both agent skills, and says it wrote outside the project', async () => {
     const result = await ok('init');
-    assert.match(result.out, /Installed the agent skill/);
+    assert.match(result.out, /Installed the agent skills in .*: tasks, plans/);
     assert.match(result.out, /outside this project/);
     assert.match(await readFile(join(skills, 'tasks', 'SKILL.md'), 'utf8'), /^---\nname: tasks\n/);
+    assert.match(await readFile(join(skills, 'plans', 'SKILL.md'), 'utf8'), /^---\nname: plans\n/);
   });
 
-  it('leaves the skill alone with --skip-skill', async () => {
+  it('leaves the skills alone with --skip-skill', async () => {
     const result = await ok('init', '--skip-skill');
     assert.doesNotMatch(result.out, /skill/);
     await assert.rejects(readFile(join(skills, 'tasks', 'SKILL.md'), 'utf8'));
+    await assert.rejects(readFile(join(skills, 'plans', 'SKILL.md'), 'utf8'));
   });
 
   it('does not mention the skill again once it is current', async () => {
     await ok('init');
     await rm(join(project, '.tasks'), { recursive: true, force: true });
     assert.doesNotMatch((await ok('init')).out, /skill/);
+  });
+
+  it('creates docs/plans/ with a template', async () => {
+    const result = await ok('init');
+    assert.match(result.out, /Created docs\/plans\//);
+    assert.match(await readFile(join(project, 'docs', 'plans', 'TEMPLATE.md'), 'utf8'), /## Spec/);
+  });
+
+  it('leaves docs/plans/ alone with --skip-plans', async () => {
+    const result = await ok('init', '--skip-plans');
+    assert.doesNotMatch(result.out, /docs\/plans/);
+    await assert.rejects(stat(join(project, 'docs', 'plans')));
+  });
+
+  it('does not hand back a template the project deleted', async () => {
+    await ok('init');
+    await rm(join(project, 'docs', 'plans', 'TEMPLATE.md'));
+    const result = await ok('init');
+    assert.doesNotMatch(result.out, /docs\/plans/);
+    await assert.rejects(stat(join(project, 'docs', 'plans', 'TEMPLATE.md')));
+  });
+
+  it('adopts plans on a repeat init in an existing project', async () => {
+    await ok('init', '--skip-plans');
+    assert.match((await ok('init')).out, /Created docs\/plans\//);
   });
 
   it('creates .gitignore in a git repo', async () => {

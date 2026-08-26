@@ -105,6 +105,24 @@ invent a column by writing a status the project does not have.
 - **a new task** — a genuinely separate piece of work. If it would be finished at a different
   time from the current task, it is a new task.
 
+## Plans
+
+Work big enough to need a written argument gets a plan document in `docs/plans/`, numbered
+`NNNN-slug.md`. `tasks init` puts a `TEMPLATE.md` there to start from.
+
+A plan holds the reasoning: the problem, the spec, what is out of scope, the order the work goes
+in. The board holds the state. Never write a task checklist into a plan, and never leave the
+reasoning only in a task.
+
+- **Before starting a task**, read any `docs/plans/...` path in its refs. That is the context the
+  task was written from, and it is usually shorter than reconstructing it from the code.
+- **When you cut tasks from a plan**, put the plan's path in the refs of every one of them:
+  `tasks add "..." --refs=docs/plans/0003-blocked-status.md,packages/core/src/task.ts`.
+- **When the work changes shape**, edit the plan and `tasks note` the task. The plan is the
+  argument as it now stands; the note is what actually happened and when.
+- **A superseded plan stays**, with a line at the top pointing at the plan that replaced it. Same
+  habit as the ADRs.
+
 ## Rules
 
 1. Never edit `.tasks/tasks.jsonl` by hand.
@@ -116,3 +134,5 @@ invent a column by writing a status the project does not have.
 5. Quote task IDs when you mention a task to the human, so they can find the card.
 6. Look up statuses with `tasks status list`; never assume the four defaults, and never write a
    status the project does not have. Change columns only through `tasks status`.
+7. A plan document is the reasoning, the board is the state. Do not duplicate one into the
+   other.

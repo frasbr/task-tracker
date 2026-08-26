@@ -70,11 +70,17 @@ When adding to or updating this map:
   `install-extension` builds, packages and installs the board (`--status` / `--uninstall` /
   `--dev`, and `VSCODE_EXTENSIONS_DIR` redirects it, which is how it is tested safely).
   `npm run install-all` runs both.
-- **`.claude/skills/tasks/`** — the skill that teaches agents to _use_ the tool, not to build it.
-  Compiled into the `tasks` binary and installed by `tasks init`. Boundary 10.
+- **`.claude/skills/tasks/`** and **`.claude/skills/plans/`** — the two skills that teach agents
+  to _use_ the tool, not to build it. `tasks` covers the board, `plans` covers writing the
+  documents its work is cut from. Both are compiled into the `tasks` binary and installed by
+  `tasks init`. Boundary 10.
 - **`.tasks/`** — this repo's own board, kept by the tool itself.
 - **`docs/adr/`** — why the architecture is the shape it is. Numbered, short, and appended to
   rather than rewritten.
+- **`docs/plans/`** — the argument behind a piece of work before it exists: problem, spec, what
+  is out of scope, and the order the steps go in. One numbered file per feature, flat.
+  `TEMPLATE.md` here is the master copy of what `tasks init` writes into other projects.
+  Boundary 11.
 - **`CONTEXT-MAP.md`** and the `CONTEXT.md` beside each package — the project's language.
   Glossaries, with no implementation detail in them. See Vocabulary above.
 - **`AGENTS.md`** — this file. How to work here, and the source of truth for architecture and
@@ -144,9 +150,18 @@ here. The argument for it is in the linked ADR.
    MODULE_TYPELESS_PACKAGE_JSON warning from `node --test` is the correct trade and must not be
    silenced that way. ([ADR 0005](docs/adr/0005-the-extension-bundle-stays-commonjs.md))
 
-10. **`.claude/skills/tasks/` is the master copy of the agent skill.** Edit it there, never in
-    `~/.claude/skills` — an edit made in the installed location is silently overwritten on the
-    next install. ([ADR 0017](docs/adr/0017-the-agent-skill-ships-inside-the-binary.md))
+10. **`.claude/skills/tasks/` and `.claude/skills/plans/` are the master copies of the agent
+    skills.** Edit them there, never in `~/.claude/skills` — an edit made in the installed
+    location is silently overwritten on the next install. Adding a third means adding it to the
+    `SKILLS` list in `skill.ts`; nothing discovers them from disk.
+    ([ADR 0017](docs/adr/0017-the-agent-skill-ships-inside-the-binary.md),
+    [0018](docs/adr/0018-plans-live-in-a-numbered-directory.md))
+
+11. **A plan holds the reasoning, the board holds the state.** No task checklists and no
+    progress in `docs/plans/`; no reasoning that lives only in a task. The two are joined by
+    `refs` — a task cut from a plan carries the plan's path. `docs/plans/TEMPLATE.md` is the
+    master copy shipped by `tasks init`, so editing it changes what every other project gets.
+    ([ADR 0018](docs/adr/0018-plans-live-in-a-numbered-directory.md))
 
 ---
 
@@ -160,6 +175,7 @@ data-model decisions that have no boundary to enforce them.
 - [0009](docs/adr/0009-tasks-open-as-editor-tabs-not-files.md) tasks as editor tabs
 - [0010](docs/adr/0010-task-documents-are-not-yaml.md) the task document format
 - [0011](docs/adr/0011-filter-and-sort-are-view-state.md) filter and sort as view state
+- [0018](docs/adr/0018-plans-live-in-a-numbered-directory.md) plans as numbered documents
 
 Start at [0001](docs/adr/0001-tasks-are-local-working-memory.md). Tasks are one person's local
 working memory, and every other decision assumes it.
@@ -198,9 +214,10 @@ A change is done when all of the following are true. Do not report completion ot
    it is part of done.
 5. If a term changed meaning, gained a better name, or was invented, the relevant `CONTEXT.md`
    was updated in the same change. A stale glossary is worse than no glossary.
-6. If the CLI's interface changed, `.claude/skills/tasks/SKILL.md` was updated to match. That file
-   is the contract agents rely on; the two drift apart the moment you forget. It is compiled
-   into the binary, so a stale skill ships to every project the user initialises.
+6. If the CLI's interface changed, `.claude/skills/tasks/SKILL.md` was updated to match, and
+   `.claude/skills/plans/SKILL.md` too where the change touches plans. Those files are the
+   contract agents rely on; they drift apart from the CLI the moment you forget. Both are
+   compiled into the binary, so a stale skill ships to every project the user initialises.
 
 ## Watch out for
 

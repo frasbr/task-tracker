@@ -46,14 +46,19 @@ export const COMMAND_HELP: Readonly<Record<string, string>> = {
   Creates .tasks/ and, where there is a git repo, adds it to .gitignore. Tasks are
   local working memory, not a team artifact.
 
-  Also installs the agent skill to ~/.claude/skills/tasks/ the first time it runs, so
-  agents in every project know these commands exist. That is the one thing this
+  Creates docs/plans/ too, with a template in it. A plan holds the reasoning behind a
+  piece of work; the board holds its state. A task points back at its plan through refs.
+
+  Also installs two agent skills to ~/.claude/skills/ the first time it runs: 'tasks',
+  so agents in every project know these commands exist, and 'plans', which teaches
+  them to write the documents the work is cut from. That is the one thing this
   command writes outside the project, and it says so when it does.
 
   --prefix=<name>, -p <name>  the task ID prefix, e.g. \`tt\` for ids like tt-7.
                              Defaults to the repository's own name. Set once, here —
                              changing it afterwards needs \`tasks migrate-ids\`.
-  --skip-skill               only create the store
+  --skip-skill               leave ~/.claude/skills alone (both skills)
+  --skip-plans               leave docs/plans/ alone
 
   tasks init
   tasks init --prefix=tt`,

@@ -45,11 +45,24 @@ no command needs a configured path, and why `-C` is the only way to point somewh
 _Avoid_: resolution, lookup, root finding
 
 **Agent skill**:
-The instructions that teach an agent to use this CLI, compiled into the binary and installed to
-the user's home directory by `tasks init`. Teaches using the tool, not building it.
+Instructions that teach an agent to use this CLI, compiled into the binary and installed to the
+user's home directory by `tasks init`. Teaches using the tool, not building it. There are two:
+`tasks` for the board, `plans` for the documents its work is cut from.
 _Avoid_: prompt, plugin, docs, instructions
 
 **Init**:
-Setting a project up. Creating `.tasks/`, choosing the prefix, and installing the agent skill.
-The one command that writes outside the project, which it says when it does.
+Setting a project up. Creating `.tasks/`, choosing the prefix, scaffolding `docs/plans/`, and
+installing the agent skill. The one command that writes outside the project, which it says when
+it does.
 _Avoid_: setup, bootstrap, install
+
+**Plan**:
+A numbered document under `docs/plans/` holding the argument behind a piece of work: the
+problem, the spec, what is out of scope, and the order the steps go in. Holds no progress — a
+task's `refs` point back at its plan, and the board is what says where the work has got to.
+_Avoid_: spec (a section inside a plan, not the whole thing), design doc, roadmap
+
+**Plan template**:
+The `TEMPLATE.md` that `init` writes into `docs/plans/`. A starting point a project is meant to
+edit, unlike the agent skill, which is a contract kept in step with the CLI.
+_Avoid_: scaffold, boilerplate, skeleton

@@ -35,7 +35,8 @@ import type {
 import { UsageError, flagList, flagSet, flagValue, parseArgs, rejectUnknownFlags } from './args.ts';
 import type { ParsedArgs } from './args.ts';
 import { formatJson, formatList, formatSummary, formatTask } from './format.ts';
-import { installSkill } from './skill.ts';
+import { PLANS_DIR, PLAN_TEMPLATE_NAME, installPlanTemplate } from './plans.ts';
+import { installSkills, skillsHome } from './skill.ts';
 import { COMMAND_HELP, USAGE } from './help.ts';
 
 /**
@@ -131,24 +132,41 @@ async function dispatch(
 // ---------------------------------------------------------------- commands
 
 async function init(args: ParsedArgs, io: Io, directory: string): Promise<number> {
-  rejectUnknownFlags(args, ['skip-skill', 'prefix'], 'init');
+  rejectUnknownFlags(args, ['skip-skill', 'skip-plans', 'prefix'], 'init');
 
-  // The skill goes in first: an agent that cannot find it does not know this CLI exists,
+  // The skills go in first: an agent that cannot find them does not know this CLI exists,
   // which makes an initialised store useless to the thing it is meant to be shared with.
   if (!flagSet(args, 'skip-skill')) {
-    const skill = await installSkill();
-    switch (skill.kind) {
-      case 'installed':
-        io.out(`Installed the agent skill at ${skill.path}`);
-        io.out('  That is outside this project, and applies to every project.');
-        break;
-      case 'updated':
-        io.out(`Updated the agent skill at ${skill.path}`);
-        io.out(`  Your previous copy is at ${skill.backup}`);
-        break;
-      case 'current':
-      case 'skipped':
-        break;
+    const outcomes = await installSkills();
+
+    const installed = outcomes.filter((outcome) => outcome.kind === 'installed');
+    if (installed.length > 0) {
+      const names = installed.map((outcome) => outcome.name).join(', ');
+      io.out(
+        installed.length === 1
+          ? `Installed the '${names}' agent skill in ${skillsHome()}`
+          : `Installed the agent skills in ${skillsHome()}: ${names}`,
+      );
+      io.out('  That is outside this project, and applies to every project.');
+    }
+
+    for (const outcome of outcomes) {
+      if (outcome.kind !== 'updated') continue;
+      io.out(`Updated the '${outcome.name}' agent skill at ${outcome.path}`);
+      io.out(`  Your previous copy is at ${outcome.backup}`);
+    }
+  }
+
+  // Plans go in before the store check below, so an existing project adopts the convention
+  // by re-running init rather than by being told it is already set up.
+  if (!flagSet(args, 'skip-plans')) {
+    const plans = await installPlanTemplate(directory);
+    if (plans.kind === 'created') {
+      io.out(`Created ${PLANS_DIR}/ and a plan template in it`);
+      io.out(
+        `  Copy ${PLAN_TEMPLATE_NAME} to ${PLANS_DIR}/0001-<slug>.md to start one. Plans hold the`,
+      );
+      io.out('  reasoning; the board holds the state. Point a task at its plan with --refs.');
     }
   }
 
