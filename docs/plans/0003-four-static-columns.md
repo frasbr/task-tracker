@@ -110,18 +110,25 @@ Deliberately Not Built — it is built.
 
 ## Approach
 
-The type comes first: the union in `task.ts` and `isTaskStatus` losing its parameter. Everything
-downstream is then a compiler error, which is a better worklist than a search — 137 references,
-and the ones that matter are indistinguishable by grep from the ones that do not.
+Delete from the outside in: the CLI subcommands first, then the extension's commands and
+wrappers, then the four `TaskStore` methods they were the only callers of, and only then the
+type.
 
-Config is the step most likely to force a rethink, so take it before deleting anything. It is
-the only part that can strand data: a status list that is not the four, or a task sitting in a
-column that no longer exists. Decide what those do — the Spec says hard error, but that is worth
-holding against the real config on disk before the deletions make it awkward to change.
+The tempting order is the opposite one — flip the type first and let the compiler produce the
+worklist. It does not work. `renameStatus` writes an arbitrary string into `task.status`
+([jsonl.ts:191](../../packages/core/src/jsonl.ts#L191)), and `removeStatus` does the same at
+line 252. A union makes both unimplementable, so a type-first change has to either cast — which
+commits a known bug for as long as it takes to get back to it — or delete the methods in the
+same commit, which welds four steps into one. Taking the surface off first means nothing is
+still calling those methods by the time the union lands, and every step compiles on its own.
 
-Then delete outward from core: the five `TaskStore` methods and their JSONL implementations, then
-the CLI verb, then the extension's wrappers, commands and `package.json` entries. That order
-keeps the build meaningful at each step; going the other way leaves core methods nothing calls.
+`listStatuses` is the exception and survives the cull: `tasks status list` keeps working, and
+the board reads its columns through it.
+
+Config comes after the type rather than before it. It is the step that can strand data — a
+status list that is not the four, or a task sitting in a column that no longer exists — so it
+wants the union already in place to check against rather than a list read from the file it is
+about to stop reading.
 
 `SKILL.md` and the ADR land with the change that makes them true, not in a pass afterwards.
 
