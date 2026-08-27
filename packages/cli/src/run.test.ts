@@ -249,6 +249,14 @@ describe('add', () => {
     assert.deepEqual(task?.refs, ['src/auth.ts:42-58', 'docs/adr.md']);
   });
 
+  it('sets blockedBy to ids that already exist', async () => {
+    await seed();
+    const prereq = await idOf('Fix auth');
+    await ok('add', 'Ship the redirect fix', `--blocked-by=${prereq}`);
+    const [task] = await json<Task[]>('list', '--query=Ship the redirect fix');
+    assert.deepEqual(task?.blockedBy, [prereq]);
+  });
+
   it('requires a title', async () => {
     await ok('init');
     const result = await tasks('add');
@@ -261,6 +269,22 @@ describe('add', () => {
     const result = await tasks('add', 'x', '--assignee=me');
     assert.equal(result.code, EXIT_USAGE);
     assert.match(result.err, /unknown flag --assignee/);
+  });
+
+  it('rejects --blocked-by naming an id that does not exist, with exit 2', async () => {
+    await seed();
+    // Same shape as a real id in this store, but a number nothing was ever given.
+    const unknown = `${(await idOf('Fix auth')).replace(/-\d+$/, '-999999')}`;
+    const result = await tasks('add', 'Ship the fix', `--blocked-by=${unknown}`);
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /no task with that ID/);
+  });
+
+  it('rejects a malformed id in --blocked-by, with exit 2', async () => {
+    await seed();
+    const result = await tasks('add', 'Ship the fix', '--blocked-by=not-an-id');
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /not a valid task id/);
   });
 });
 
@@ -323,7 +347,17 @@ describe('show', () => {
     const result = await ok('show', id);
     assert.match(result.out, /status {4}backlog/);
     assert.match(result.out, /tags {6}bug, frontend/);
+    assert.match(result.out, /blockedBy —/);
     assert.match(result.out, /Root cause: double encoding\./);
+  });
+
+  it('prints blockedBy once set', async () => {
+    await seed();
+    const prereq = await idOf('Fix auth');
+    const id = await idOf('Rate limit');
+    await ok('update', id, `--blocked-by=${prereq}`);
+    const result = await ok('show', id);
+    assert.match(result.out, new RegExp(`blockedBy ${prereq}`));
   });
 
   it('reports an unknown ID with a way to recover', async () => {
@@ -356,6 +390,53 @@ describe('update', () => {
     const result = await tasks('update', await idOf('Fix auth'));
     assert.equal(result.code, EXIT_FAILED);
     assert.match(result.err, /nothing to change/);
+  });
+
+  it('replaces blockedBy rather than merging, matching --refs', async () => {
+    await seed();
+    const a = await idOf('Fix auth');
+    const b = await idOf('Rate limit');
+    const target = await idOf('Document the store format');
+
+    await ok('update', target, `--blocked-by=${a}`);
+    let [task] = await json<Task[]>('list', '--query=Document the store format');
+    assert.deepEqual(task?.blockedBy, [a]);
+
+    await ok('update', target, `--blocked-by=${b}`);
+    [task] = await json<Task[]>('list', '--query=Document the store format');
+    assert.deepEqual(task?.blockedBy, [b], 'the second update replaces, not adds to, the list');
+
+    await ok('update', target, '--blocked-by=');
+    [task] = await json<Task[]>('list', '--query=Document the store format');
+    assert.deepEqual(task?.blockedBy, [], 'an empty value clears it, same as --refs=');
+  });
+
+  it('rejects --blocked-by naming an id that does not exist, with exit 2', async () => {
+    await seed();
+    const id = await idOf('Fix auth');
+    // Same shape as a real id in this store, but a number nothing was ever given.
+    const unknown = id.replace(/-\d+$/, '-999999');
+    const result = await tasks('update', id, `--blocked-by=${unknown}`);
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /no task with that ID/);
+  });
+
+  it('rejects an edge that closes a cycle, with exit 2', async () => {
+    await seed();
+    const id = await idOf('Fix auth');
+    const result = await tasks('update', id, `--blocked-by=${id}`);
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /closes a cycle/);
+  });
+
+  it('rejects a two-task cycle, with exit 2', async () => {
+    await seed();
+    const a = await idOf('Fix auth');
+    const b = await idOf('Rate limit');
+    await ok('update', a, `--blocked-by=${b}`);
+    const result = await tasks('update', b, `--blocked-by=${a}`);
+    assert.equal(result.code, EXIT_USAGE);
+    assert.match(result.err, /closes a cycle/);
   });
 });
 

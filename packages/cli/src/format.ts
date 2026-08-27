@@ -57,6 +57,7 @@ export function formatTask(task: Task): string {
     `  category  ${task.category || '—'}`,
     `  tags      ${task.tags.length > 0 ? task.tags.join(', ') : '—'}`,
     `  refs      ${task.refs.length > 0 ? task.refs.join('\n            ') : '—'}`,
+    `  blockedBy ${task.blockedBy.length > 0 ? task.blockedBy.join('\n            ') : '—'}`,
     `  created   ${task.created}`,
     `  updated   ${task.updated}`,
   ];

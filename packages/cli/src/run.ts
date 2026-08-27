@@ -250,28 +250,31 @@ async function add(
   store: TaskStore,
   config: ProjectConfig | undefined,
 ): Promise<number> {
-  rejectUnknownFlags(args, ['category', 'tags', 'status', 'notes', 'refs'], 'add');
+  rejectUnknownFlags(args, ['category', 'tags', 'status', 'notes', 'refs', 'blocked-by'], 'add');
 
   const title = args.positionals.join(' ').trim();
   if (title === '') {
     throw new UsageError('add: a title is required, as `tasks add "Fix the thing"`.');
   }
 
-  const draft = parseDraft(
-    compact({
-      title,
-      notes: flagValue(args, 'notes'),
-      category: flagValue(args, 'category'),
-      tags: flagList(args, 'tags'),
-      status: flagValue(args, 'status'),
-      refs: flagList(args, 'refs'),
-    }),
-    statusesOf(config),
-  );
+  return rejectingBlockedByAsUsage(async () => {
+    const draft = parseDraft(
+      compact({
+        title,
+        notes: flagValue(args, 'notes'),
+        category: flagValue(args, 'category'),
+        tags: flagList(args, 'tags'),
+        status: flagValue(args, 'status'),
+        refs: flagList(args, 'refs'),
+        blockedBy: flagList(args, 'blocked-by'),
+      }),
+      statusesOf(config),
+    );
 
-  const task = await store.create(draft);
-  emit(args, io, task, `Added ${task.id}  ${task.title}  (${task.status})`);
-  return EXIT_OK;
+    const task = await store.create(draft);
+    emit(args, io, task, `Added ${task.id}  ${task.title}  (${task.status})`);
+    return EXIT_OK;
+  });
 }
 
 async function list(
@@ -338,7 +341,15 @@ async function show(
   return EXIT_OK;
 }
 
-const UPDATE_FIELD_FLAGS = ['title', 'category', 'tags', 'status', 'notes', 'refs'] as const;
+const UPDATE_FIELD_FLAGS = [
+  'title',
+  'category',
+  'tags',
+  'status',
+  'notes',
+  'refs',
+  'blocked-by',
+] as const;
 
 async function update(
   args: ParsedArgs,
@@ -349,23 +360,26 @@ async function update(
   rejectUnknownFlags(args, [...UPDATE_FIELD_FLAGS, 'markdown'], 'update');
   const id = requiredId(args, 'update', config);
 
-  const patch = flagSet(args, 'markdown')
-    ? await patchFromDocument(args, io, id, config)
-    : parsePatch(
-        compact({
-          title: flagValue(args, 'title'),
-          notes: flagValue(args, 'notes'),
-          category: flagValue(args, 'category'),
-          tags: flagList(args, 'tags'),
-          status: flagValue(args, 'status'),
-          refs: flagList(args, 'refs'),
-        }),
-        statusesOf(config),
-      );
+  return rejectingBlockedByAsUsage(async () => {
+    const patch = flagSet(args, 'markdown')
+      ? await patchFromDocument(args, io, id, config)
+      : parsePatch(
+          compact({
+            title: flagValue(args, 'title'),
+            notes: flagValue(args, 'notes'),
+            category: flagValue(args, 'category'),
+            tags: flagList(args, 'tags'),
+            status: flagValue(args, 'status'),
+            refs: flagList(args, 'refs'),
+            blockedBy: flagList(args, 'blocked-by'),
+          }),
+          statusesOf(config),
+        );
 
-  const task = await store.update(id, patch);
-  emit(args, io, task, `Updated ${task.id}  ${task.title}`);
-  return EXIT_OK;
+    const task = await store.update(id, patch);
+    emit(args, io, task, `Updated ${task.id}  ${task.title}`);
+    return EXIT_OK;
+  });
 }
 
 /**
@@ -622,6 +636,28 @@ function checkedPrefix(input: string): string {
     throw new UsageError(error instanceof Error ? error.message : String(error));
   }
   return prefix;
+}
+
+/**
+ * `blockedBy` is the field the plan calls a malformed request, not merely one that could
+ * not be carried out: an unknown id, a cycle, and a bad id shape are all exit 2. All
+ * three surface as `TaskValidationError` tagged `field: 'blockedBy'` — the shape check in
+ * validate.ts throws before the store is ever touched, and the whole-store
+ * existence/cycle check in `checkPrerequisites` (packages/core/src/prerequisites.ts)
+ * throws from inside `store.create`/`store.update`. Catching both here and re-throwing as
+ * `UsageError` — the same move `checkedPrefix` below makes for `checkPrefix` — gets
+ * `blockedBy` to exit 2 without moving every other `TaskValidationError` (an unknown
+ * field, an empty title) off the exit 1 they exit today and run.test.ts asserts.
+ */
+async function rejectingBlockedByAsUsage<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof TaskValidationError && error.field === 'blockedBy') {
+      throw new UsageError(error.message);
+    }
+    throw error;
+  }
 }
 
 /**

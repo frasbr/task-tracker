@@ -53,11 +53,16 @@ tasks move <id> done
 tasks note <id> "Root cause: redirectTo double-encoded in the callback handler."
 tasks update <id> --title="..." --category=... --tags=...
 tasks update <id> --refs=src/auth.ts:42-58
+tasks update <id> --blocked-by=<id>,<id>
 tasks remove <id> --force
 ```
 
 `remove` asks for confirmation on stdin by default -- pass `--force` to skip the prompt, which is
 what you almost always want in a non-interactive session.
+
+`--blocked-by` also works on `add`. It replaces the whole list, same as `--refs`; `--blocked-by=`
+clears it. An id that does not exist, or an edge that closes a cycle (including a task blocking
+itself), is rejected with exit 2 — fix the id or the edge rather than retrying.
 
 ## Statuses
 
@@ -102,6 +107,9 @@ invent a column by writing a status the project does not have.
 - **category** — one bucket, reused across tasks. Prefer an existing one; check with
   `tasks list --json` before inventing a new one. Useful for grouping tasks by feature or work-type
 - **tags** — many, for filtering. `bug`, `refactor`, `docs`, and so on.
+- **blockedBy** — task ids this one is waiting on (`--blocked-by`). Display only: nothing
+  refuses a status move, and it does not enforce order. Set it when the dependency is real,
+  not as a way to sequence work you are about to do yourself.
 - **a new task** — a genuinely separate piece of work. If it would be finished at a different
   time from the current task, it is a new task.
 
@@ -126,7 +134,7 @@ reasoning only in a task.
 ## Rules
 
 1. Never edit `.tasks/tasks.jsonl` by hand.
-2. Never invent fields. The schema is fixed at ten fields and validation will reject anything
+2. Never invent fields. The schema is fixed at eleven fields and validation will reject anything
    else.
 3. Filter your reads. `tasks list` with no flags is rarely the right call.
 4. Move a task to `in-progress` when you start it, not when you finish it. The board is a live

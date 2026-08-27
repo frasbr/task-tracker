@@ -70,6 +70,7 @@ export const COMMAND_HELP: Readonly<Record<string, string>> = {
   --status=<status>          defaults to backlog
   --notes=<text>             the body; multi-line is fine
   --refs=<path[:lines],...>  e.g. src/auth.ts:42-58
+  --blocked-by=<id,...>      task ids this one waits on; each must already exist
 
   tasks add "Fix auth redirect loop" --category=auth --tags=bug,frontend`,
 
@@ -107,6 +108,7 @@ export const COMMAND_HELP: Readonly<Record<string, string>> = {
   --status=<status>          appends to the end of the new column
   --notes=<text>             replaces the notes; use \`tasks note\` to append
   --refs=<path[:lines],...>  replaces the existing refs
+  --blocked-by=<id,...>      replaces the existing prerequisites; must exist, no cycles
   --markdown                 read the whole task from stdin as the document
                              \`tasks show --markdown\` writes. Not combinable with
                              the field flags — the document already carries them.
