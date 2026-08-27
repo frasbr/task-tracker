@@ -1,17 +1,7 @@
 import * as vscode from 'vscode';
 import { BOARD_VIEW_TYPE, BoardPanel, openReference } from './board-panel.ts';
-import {
-  addStatus,
-  addTask,
-  listStatuses,
-  listTasks,
-  removeStatus,
-  removeTask,
-  renameStatus,
-  showTask,
-} from './cli.ts';
+import { addTask, listTasks, removeTask, showTask } from './cli.ts';
 import { describeProblem } from './interpret.ts';
-import { columnLabel } from './protocol.ts';
 import type { BoardProblem, BoardTask } from './protocol.ts';
 import { StoreWatcher } from './store-watcher.ts';
 import { TASK_SCHEME, TaskDocumentProvider, idOf, taskUri } from './task-document.ts';
@@ -19,7 +9,6 @@ import {
   CategoryDecorationProvider,
   TASKS_VIEW_ID,
   TasksTreeProvider,
-  columnOf,
   taskOf,
 } from './tasks-tree.ts';
 
@@ -54,7 +43,6 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(watcher);
 
   registerTaskMutations(context, watcher);
-  registerStatusMutations(context, watcher, refreshAll);
 
   // Lets VSCode restore an open board after a window reload.
   context.subscriptions.push(
@@ -197,169 +185,6 @@ function registerTaskMutations(context: vscode.ExtensionContext, watcher: StoreW
       void deleteTask(target, watcher);
     }),
   );
-}
-
-/**
- * The status commands, plus the sidebar `+` that fronts them. A column can now be
- * created, renamed and removed without leaving the sidebar. Validation stays in the CLI
- * (AGENTS.md boundary 3): the extension gathers input, spawns, and surfaces whatever the
- * CLI says — it never pre-checks a name or decides where tasks may go.
- */
-function registerStatusMutations(
-  context: vscode.ExtensionContext,
-  watcher: StoreWatcher,
-  refreshAll: () => void,
-): void {
-  context.subscriptions.push(
-    // The sidebar title `+`: one gesture, two kinds of "new".
-    vscode.commands.registerCommand('taskTracker.newItem', () => void newItem(watcher, refreshAll)),
-    vscode.commands.registerCommand(
-      'taskTracker.renameStatus',
-      (target: unknown) => void renameColumn(target, refreshAll),
-    ),
-    vscode.commands.registerCommand(
-      'taskTracker.removeStatus',
-      (target: unknown) => void removeColumn(target, refreshAll),
-    ),
-  );
-}
-
-/** The `+` menu: a new task (the common case, so it is first) or a new column. */
-async function newItem(watcher: StoreWatcher, refreshAll: () => void): Promise<void> {
-  const choice = await vscode.window.showQuickPick(
-    [
-      { label: '$(add) New task…', action: 'task' as const },
-      { label: '$(list-unordered) New status…', action: 'status' as const },
-    ],
-    { placeHolder: 'Create a task or a column' },
-  );
-  if (choice === undefined) return;
-
-  if (choice.action === 'task') {
-    await createTask(undefined, watcher);
-    return;
-  }
-  await createStatus(refreshAll);
-}
-
-/**
- * Prompts for a name, then for where the column goes — a position the user chooses rather
- * than a silent append, because on a board they are looking at the order. "At the end" is
- * the default, and every gap between existing columns is offered as "Before <column>".
- */
-async function createStatus(refreshAll: () => void): Promise<void> {
-  const directory = requireWorkspaceDirectory();
-  if (directory === undefined) return;
-
-  const name = await vscode.window.showInputBox({
-    prompt: 'New column name',
-    placeHolder: 'review',
-  });
-  if (name === undefined) return; // cancelled
-
-  const statuses = await listStatuses(directory);
-  if (!statuses.ok) {
-    void vscode.window.showErrorMessage(problemMessage(statuses.problem));
-    return;
-  }
-
-  const position = await pickPosition(statuses.value);
-  if (position === undefined) return; // cancelled
-
-  const result = await addStatus(directory, name, position);
-  if (!result.ok) {
-    void vscode.window.showErrorMessage(problemMessage(result.problem));
-    return;
-  }
-  refreshAll();
-}
-
-/** Renames the column a context-menu command was fired on. */
-async function renameColumn(target: unknown, refreshAll: () => void): Promise<void> {
-  const directory = requireWorkspaceDirectory();
-  if (directory === undefined) return;
-
-  const column = columnOf(target);
-  if (column === undefined) return;
-
-  const to = await vscode.window.showInputBox({
-    prompt: `Rename column "${columnLabel(column.status)}"`,
-    value: column.status,
-  });
-  if (to === undefined || to === column.status) return;
-
-  const result = await renameStatus(directory, column.status, to);
-  if (!result.ok) {
-    void vscode.window.showErrorMessage(problemMessage(result.problem));
-    return;
-  }
-  refreshAll();
-}
-
-/**
- * Removes the column a context-menu command was fired on. A non-empty column needs
- * somewhere for its tasks to go, asked for with the same kind of prompt as placing a new
- * one — the CLI refuses otherwise, and this makes the destination a deliberate choice.
- */
-async function removeColumn(target: unknown, refreshAll: () => void): Promise<void> {
-  const directory = requireWorkspaceDirectory();
-  if (directory === undefined) return;
-
-  const column = columnOf(target);
-  if (column === undefined) return;
-
-  const statuses = await listStatuses(directory);
-  if (!statuses.ok) {
-    void vscode.window.showErrorMessage(problemMessage(statuses.problem));
-    return;
-  }
-  const others = statuses.value.filter((status) => status !== column.status);
-
-  let moveTo: string | undefined;
-  if (column.count > 0) {
-    if (others.length === 0) {
-      void vscode.window.showErrorMessage(
-        `"${columnLabel(column.status)}" is the only column and still holds tasks, so it cannot be removed.`,
-      );
-      return;
-    }
-    const picked = await vscode.window.showQuickPick(
-      others.map((status) => ({ label: columnLabel(status), status })),
-      {
-        placeHolder: `Move ${column.count} task${column.count === 1 ? '' : 's'} to which column?`,
-      },
-    );
-    if (picked === undefined) return; // cancelled
-    moveTo = picked.status;
-  }
-
-  const result = await removeStatus(directory, column.status, moveTo);
-  if (!result.ok) {
-    void vscode.window.showErrorMessage(problemMessage(result.problem));
-    return;
-  }
-  refreshAll();
-}
-
-/**
- * Where a new column goes. "At the end" is offered first, so it is the default; every
- * other choice is "Before <column>", which together with "at the end" can express any
- * gap. An empty object means append. `undefined` means the user cancelled.
- */
-async function pickPosition(
-  statuses: readonly string[],
-): Promise<{ after?: string; before?: string } | undefined> {
-  const items = [
-    { label: 'At the end', position: {} as { after?: string; before?: string } },
-    ...statuses.map((status) => ({
-      label: `Before ${columnLabel(status)}`,
-      position: { before: status },
-    })),
-  ];
-  const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Where should the new column go?',
-  });
-  return picked?.position;
 }
 
 /**

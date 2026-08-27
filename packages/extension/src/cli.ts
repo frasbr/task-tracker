@@ -40,52 +40,13 @@ export async function listTasks(directory: string): Promise<CliResult<BoardTask[
   }
 }
 
-/** The project's ordered status list, from `tasks status list --json`. */
+/**
+ * The four columns in board order, from `tasks status list --json`. Read-only: the columns
+ * are the schema, so there is nothing here that writes one.
+ */
 export async function listStatuses(directory: string): Promise<CliResult<string[]>> {
   const result = await text(directory, ['status', 'list', '--json']);
   return result.ok ? { ok: true, value: JSON.parse(result.value) as string[] } : result;
-}
-
-/**
- * Adds a column via `tasks status add`. An empty `position` appends; the CLI owns name
- * validation, so a bad name comes back as a problem the caller surfaces rather than being
- * pre-checked here (AGENTS.md boundary 3).
- */
-export async function addStatus(
-  directory: string,
-  name: string,
-  position: { after?: string; before?: string } = {},
-): Promise<CliResult<void>> {
-  const args = ['status', 'add', name];
-  if (position.after !== undefined) args.push(`--after=${position.after}`);
-  if (position.before !== undefined) args.push(`--before=${position.before}`);
-  const result = await text(directory, args);
-  return result.ok ? { ok: true, value: undefined } : result;
-}
-
-/** Renames a column via `tasks status rename`, which carries its tasks along in one write. */
-export async function renameStatus(
-  directory: string,
-  from: string,
-  to: string,
-): Promise<CliResult<void>> {
-  const result = await text(directory, ['status', 'rename', from, to]);
-  return result.ok ? { ok: true, value: undefined } : result;
-}
-
-/**
- * Removes a column via `tasks status remove`. `moveTo` is where its tasks go, required by
- * the CLI when the column is not empty; the caller asks for it before spawning.
- */
-export async function removeStatus(
-  directory: string,
-  name: string,
-  moveTo?: string,
-): Promise<CliResult<void>> {
-  const args = ['status', 'remove', name];
-  if (moveTo !== undefined) args.push(`--move-to=${moveTo}`);
-  const result = await text(directory, args);
-  return result.ok ? { ok: true, value: undefined } : result;
 }
 
 /**

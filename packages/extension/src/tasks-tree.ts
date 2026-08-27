@@ -58,15 +58,6 @@ export function taskOf(target: unknown): BoardTask | undefined {
   return node?.kind === 'task' ? node.task : undefined;
 }
 
-/**
- * The status a column command was fired on, with how many tasks sit in it — the count is
- * what decides whether removing it needs somewhere for those tasks to go.
- */
-export function columnOf(target: unknown): { status: BoardStatus; count: number } | undefined {
-  const node = target as Node | undefined;
-  return node?.kind === 'column' ? { status: node.status, count: node.tasks.length } : undefined;
-}
-
 export class TasksTreeProvider implements vscode.TreeDataProvider<Node> {
   readonly #changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.#changed.event;

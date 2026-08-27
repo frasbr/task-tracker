@@ -43,22 +43,6 @@
         "icon": "$(add)"
       },
       {
-        "command": "taskTracker.newItem",
-        "title": "New…",
-        "category": "Task Tracker",
-        "icon": "$(add)"
-      },
-      {
-        "command": "taskTracker.renameStatus",
-        "title": "Rename Column…",
-        "category": "Task Tracker"
-      },
-      {
-        "command": "taskTracker.removeStatus",
-        "title": "Remove Column…",
-        "category": "Task Tracker"
-      },
-      {
         "command": "taskTracker.deleteTask",
         "title": "Delete task…",
         "category": "Task Tracker",
@@ -86,7 +70,7 @@
       ],
       "view/title": [
         {
-          "command": "taskTracker.newItem",
+          "command": "taskTracker.createTask",
           "when": "view == taskTracker.tasks",
           "group": "navigation@1"
         },
@@ -116,16 +100,6 @@
           "command": "taskTracker.deleteTask",
           "when": "view == taskTracker.tasks && viewItem =~ /^taskTracker\\.task/",
           "group": "z_delete@1"
-        },
-        {
-          "command": "taskTracker.renameStatus",
-          "when": "view == taskTracker.tasks && viewItem == taskTracker.column",
-          "group": "1_modify@1"
-        },
-        {
-          "command": "taskTracker.removeStatus",
-          "when": "view == taskTracker.tasks && viewItem == taskTracker.column",
-          "group": "1_modify@2"
         }
       ],
       "commandPalette": [
@@ -135,14 +109,6 @@
         },
         {
           "command": "taskTracker.openRef",
-          "when": "false"
-        },
-        {
-          "command": "taskTracker.renameStatus",
-          "when": "false"
-        },
-        {
-          "command": "taskTracker.removeStatus",
           "when": "false"
         }
       ]
