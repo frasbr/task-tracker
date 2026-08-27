@@ -1,4 +1,4 @@
-import { isId } from './ids.ts';
+import { isId, parseId } from './ids.ts';
 import { isRank } from './rank.ts';
 import { DEFAULT_STATUSES, isTaskStatus } from './task.ts';
 import type { Task } from './task.ts';
@@ -10,7 +10,7 @@ import type { TaskDraft, TaskPatch } from './store.ts';
  * The rule that matters here is that unknown fields are an error, never something to
  * ignore. Agents write to this store, and an agent given any latitude will add a
  * plausible-looking key — `priority`, `assignee`, `due` — that then silently does
- * nothing. Failing loudly is what keeps the ten-field model actually ten fields.
+ * nothing. Failing loudly is what keeps the eleven-field model actually eleven fields.
  *
  * Messages are written for two readers: a person in a terminal and an agent reading a
  * transcript. Both need to be told what to do next, not just what was wrong.
@@ -28,10 +28,20 @@ export const TASK_FIELDS = [
   'created',
   'updated',
   'refs',
+  'blockedBy',
 ] as const satisfies readonly (keyof Task)[];
 
 /** Fields a caller may supply when creating a task. */
-const DRAFT_FIELDS = ['title', 'notes', 'category', 'tags', 'status', 'rank', 'refs'] as const;
+const DRAFT_FIELDS = [
+  'title',
+  'notes',
+  'category',
+  'tags',
+  'status',
+  'rank',
+  'refs',
+  'blockedBy',
+] as const;
 
 /** Fields a caller may change. `id` and `created` are immutable; `updated` is automatic. */
 const PATCH_FIELDS = DRAFT_FIELDS;
@@ -173,6 +183,28 @@ function checkRefs(value: unknown, where: string): string[] {
   return [...new Set(refs)];
 }
 
+/**
+ * Shape only: each entry must look like a task id, `<prefix>-<n>`. Whether that id
+ * actually exists, and whether it closes a cycle, is a whole-store question this
+ * per-record parser has no view of — that check lives elsewhere, against the store.
+ */
+function checkBlockedBy(value: unknown, where: string): string[] {
+  if (!Array.isArray(value)) {
+    fail(`${where}: 'blockedBy' must be an array of task ids.`, 'blockedBy');
+  }
+  const ids = value.map((entry) => {
+    if (typeof entry !== 'string') {
+      fail(`${where}: every entry in 'blockedBy' must be a string.`, 'blockedBy');
+    }
+    const trimmed = entry.trim();
+    if (parseId(trimmed) === undefined) {
+      fail(`${where}: '${trimmed}' is not a valid task id.`, 'blockedBy');
+    }
+    return trimmed;
+  });
+  return [...new Set(ids)];
+}
+
 // ---------------------------------------------------------------- entry points
 
 /**
@@ -198,6 +230,10 @@ export function parseTask(
   rejectUnknownFields(record, TASK_FIELDS, where);
 
   for (const field of TASK_FIELDS) {
+    // `blockedBy` is newer than every row already on disk. Treating it as required here
+    // would fail the whole store on read the moment one pre-existing task lacks it, so
+    // its absence is handled below instead, the same way `parseDraft` defaults it.
+    if (field === 'blockedBy') continue;
     if (!(field in record)) fail(`${where}: missing required field '${field}'.`, field);
   }
 
@@ -220,6 +256,7 @@ export function parseTask(
     created: checkTimestamp(record['created'], 'created', where),
     updated: checkTimestamp(record['updated'], 'updated', where),
     refs: checkRefs(record['refs'], where),
+    blockedBy: 'blockedBy' in record ? checkBlockedBy(record['blockedBy'], where) : [],
   };
 }
 
@@ -243,6 +280,7 @@ export function parseDraft(
     tags: 'tags' in record ? checkTags(record['tags'], where) : [],
     status: 'status' in record ? checkStatus(record['status'], where, statuses) : statuses[0]!,
     refs: 'refs' in record ? checkRefs(record['refs'], where) : [],
+    blockedBy: 'blockedBy' in record ? checkBlockedBy(record['blockedBy'], where) : [],
   };
 
   return 'rank' in record ? { ...draft, rank: checkRank(record['rank'], where) } : draft;
@@ -269,5 +307,6 @@ export function parsePatch(
   if ('status' in record) patch.status = checkStatus(record['status'], where, statuses);
   if ('rank' in record) patch.rank = checkRank(record['rank'], where);
   if ('refs' in record) patch.refs = checkRefs(record['refs'], where);
+  if ('blockedBy' in record) patch.blockedBy = checkBlockedBy(record['blockedBy'], where);
   return patch;
 }

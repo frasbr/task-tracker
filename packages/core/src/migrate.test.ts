@@ -14,6 +14,7 @@ function task(overrides: Partial<Task> & Pick<Task, 'id' | 'created'>): Task {
     rank: 'V',
     updated: overrides.created,
     refs: [],
+    blockedBy: [],
     ...overrides,
   };
 }

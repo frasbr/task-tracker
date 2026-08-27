@@ -8,6 +8,7 @@ import { formatId } from './ids.ts';
 import { createJsonlStore, migrateStore } from './jsonl.ts';
 import { RANK_LENGTH_LIMIT, isRank } from './rank.ts';
 import { DEFAULT_STATUSES } from './task.ts';
+import type { Task } from './task.ts';
 import { TaskValidationError } from './validate.ts';
 import type { TaskStore } from './store.ts';
 
@@ -32,6 +33,7 @@ const draft = (title: string, overrides: Record<string, unknown> = {}) => ({
   tags: [],
   status: 'backlog' as const,
   refs: [],
+  blockedBy: [],
   ...overrides,
 });
 
@@ -112,6 +114,7 @@ describe('round-tripping', () => {
       'created',
       'updated',
       'refs',
+      'blockedBy',
     ]);
   });
 
@@ -190,6 +193,78 @@ describe('updating', () => {
   });
 });
 
+describe('prerequisites', () => {
+  it('rejects a blockedBy id that does not exist in the store, and names it', async () => {
+    await assert.rejects(
+      store.create(draft('New', { blockedBy: ['task-999'] })),
+      /'task-999'.*no task with that ID exists/,
+    );
+  });
+
+  it('rejects self-blocking, as the degenerate cycle', async () => {
+    const task = await store.create(draft('Solo'));
+    await assert.rejects(store.update(task.id, { blockedBy: [task.id] }), /closes a cycle/);
+  });
+
+  it('rejects a two-task cycle', async () => {
+    const a = await store.create(draft('A'));
+    const b = await store.create(draft('B', { blockedBy: [a.id] }));
+    // b already waits on a; wiring a to wait on b as well closes it.
+    await assert.rejects(store.update(a.id, { blockedBy: [b.id] }), /closes a cycle/);
+  });
+
+  it('rejects a longer, three-task cycle', async () => {
+    const a = await store.create(draft('A'));
+    const b = await store.create(draft('B', { blockedBy: [a.id] }));
+    const c = await store.create(draft('C', { blockedBy: [b.id] }));
+    await assert.rejects(store.update(a.id, { blockedBy: [c.id] }), /closes a cycle/);
+  });
+
+  it('accepts a diamond — two paths converging on the same ancestor', async () => {
+    const a = await store.create(draft('A'));
+    const b = await store.create(draft('B', { blockedBy: [a.id] }));
+    const c = await store.create(draft('C', { blockedBy: [a.id] }));
+    const d = await store.create(draft('D'));
+    const updated = await store.update(d.id, { blockedBy: [b.id, c.id] });
+    assert.deepEqual(updated.blockedBy.slice().sort(), [b.id, c.id].sort());
+  });
+
+  it('accepts a valid edge and stores it', async () => {
+    const a = await store.create(draft('A'));
+    const b = await store.create(draft('B', { blockedBy: [a.id] }));
+    assert.deepEqual(b.blockedBy, [a.id]);
+    assert.deepEqual((await store.get(b.id))!.blockedBy, [a.id]);
+  });
+
+  it('leaves the store untouched by a rejected create', async () => {
+    const before = await store.list();
+    await assert.rejects(store.create(draft('Bad', { blockedBy: ['ghost'] })));
+    assert.deepEqual(await store.list(), before);
+  });
+
+  it('does not spend an id number on a rejected create', async () => {
+    await assert.rejects(store.create(draft('Bad', { blockedBy: ['ghost'] })));
+    const task = await store.create(draft('Good'));
+    assert.equal(task.id, 'task-1', 'the rejected attempt must not have consumed task-1');
+  });
+
+  it('does not re-check an edge this write does not touch', async () => {
+    const a = await store.create(draft('A'));
+    const b = await store.create(draft('B', { blockedBy: [a.id] }));
+
+    // store.remove would clean up b's pointer itself (that is tt-19's job, tested under
+    // "removing" below), so bypass it here to get a genuinely dangling edge on disk —
+    // the same state a hand-edited file could produce.
+    const remaining = (await lines()).filter((line) => (JSON.parse(line) as Task).id !== a.id);
+    await writeFile(file, `${remaining.join('\n')}\n`);
+
+    // Renaming b does not touch blockedBy, so its dangling pointer must not block it.
+    const updated = await store.update(b.id, { title: 'Renamed' });
+    assert.equal(updated.title, 'Renamed');
+    assert.deepEqual(updated.blockedBy, [a.id], 'the stale pointer is left exactly as-is');
+  });
+});
+
 describe('moving', () => {
   const titles = (tasks: { title: string }[]) => tasks.map((task) => task.title);
 
@@ -263,6 +338,52 @@ describe('removing', () => {
 
   it('reports an unknown ID', async () => {
     await assert.rejects(store.remove('tzzzzzzzz'), /No task with ID/);
+  });
+
+  it('drops the deleted id from every task that named it, in the same write', async () => {
+    const a = await store.create(draft('A'));
+    const b = await store.create(draft('B', { blockedBy: [a.id] }));
+    const c = await store.create(draft('C', { blockedBy: [a.id] }));
+    await store.remove(a.id);
+
+    assert.deepEqual((await store.get(b.id))!.blockedBy, []);
+    assert.deepEqual((await store.get(c.id))!.blockedBy, []);
+  });
+
+  it('keeps a surviving prerequisite when only one of two is deleted', async () => {
+    const a = await store.create(draft('A'));
+    const keep = await store.create(draft('Keep'));
+    const b = await store.create(draft('B', { blockedBy: [a.id, keep.id] }));
+    await store.remove(a.id);
+
+    assert.deepEqual((await store.get(b.id))!.blockedBy, [keep.id]);
+  });
+
+  it('leaves an empty list, not a dangling id, when the last prerequisite is deleted', async () => {
+    const a = await store.create(draft('A'));
+    const b = await store.create(draft('B', { blockedBy: [a.id] }));
+    await store.remove(a.id);
+
+    assert.deepEqual((await store.get(b.id))!.blockedBy, []);
+  });
+
+  it('changes nothing else when the deleted task had no dependents', async () => {
+    const a = await store.create(draft('A'));
+    const untouched = await store.create(draft('Untouched'));
+    await store.remove(a.id);
+
+    assert.deepEqual(await store.get(untouched.id), untouched);
+  });
+
+  it('does not bump `updated` on a task whose blockedBy was rewritten by someone else’s delete', async () => {
+    const a = await store.create(draft('A'));
+    const b = await store.create(draft('B', { blockedBy: [a.id] }));
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    await store.remove(a.id);
+
+    // Same precedent as renameStatus: a task rewritten as the side effect of someone
+    // else's write did not itself change, so its `updated` timestamp does not move.
+    assert.equal((await store.get(b.id))!.updated, b.updated);
   });
 });
 

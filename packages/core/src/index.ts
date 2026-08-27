@@ -14,6 +14,7 @@ export {
   renumberRanks,
 } from './rank.ts';
 export { TASK_FIELDS, TaskValidationError, parseDraft, parsePatch, parseTask } from './validate.ts';
+export { checkPrerequisites } from './prerequisites.ts';
 export { formatTaskDocument, parseTaskDocument } from './document.ts';
 export type { TaskDocument } from './document.ts';
 export { createJsonlStore, migrateStore } from './jsonl.ts';

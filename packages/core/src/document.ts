@@ -12,10 +12,10 @@ import { TaskValidationError, parsePatch } from './validate.ts';
  *
  * Two rules keep it honest:
  *
- * - The document exposes six fields, not ten. `rank`, `created` and `updated` are the
- *   store's to allocate, so putting them in an editable buffer would only invite edits
- *   that have to be thrown away. `id` is written but read back as an assertion about
- *   which task this is, never as something to change.
+ * - The document exposes seven fields, not eleven. `rank`, `created` and `updated` are
+ *   the store's to allocate, so putting them in an editable buffer would only invite
+ *   edits that have to be thrown away. `id` is written but read back as an assertion
+ *   about which task this is, never as something to change.
  * - Unknown header fields are an error, the same way they are in the store. A document
  *   is another surface an agent can write, so it gets the same loud failure.
  *
@@ -28,10 +28,14 @@ import { TaskValidationError, parsePatch } from './validate.ts';
 
 const FENCE = '---';
 
-/** Header fields, in the order they are written. `id` leads and is not editable. */
-const HEADER_FIELDS = ['id', 'title', 'status', 'category', 'tags', 'refs'] as const;
+/**
+ * Header fields, in the order they are written. `id` leads and is not editable.
+ * Otherwise the same order as `TASK_FIELDS` in validate.ts, with `blockedBy` last as it
+ * is there too — a reader who knows one field order can rely on the other.
+ */
+const HEADER_FIELDS = ['id', 'title', 'status', 'category', 'tags', 'refs', 'blockedBy'] as const;
 
-const LIST_FIELDS: ReadonlySet<string> = new Set(['tags', 'refs']);
+const LIST_FIELDS: ReadonlySet<string> = new Set(['tags', 'refs', 'blockedBy']);
 
 /** What a document says: which task it claims to be, and the fields it sets. */
 export interface TaskDocument {
@@ -55,6 +59,7 @@ export function formatTaskDocument(task: Task): string {
     scalar('category', task.category),
     list('tags', task.tags),
     list('refs', task.refs),
+    list('blockedBy', task.blockedBy),
   ].join('\n');
 
   const notes = task.notes.trim();
@@ -67,8 +72,9 @@ function scalar(key: string, value: string): string {
 }
 
 /**
- * Refs go one per line because a path may contain a comma or a space; tags cannot
- * contain either, so they stay inline where they are easier to read and to edit.
+ * Refs go one per line because a path may contain a comma or a space. Tags and task ids
+ * can contain neither, so `tags` and `blockedBy` stay inline where they are easier to
+ * read and to edit.
  */
 function list(key: string, values: readonly string[]): string {
   if (values.length === 0) return `${key}: []`;

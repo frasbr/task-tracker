@@ -6,6 +6,7 @@ import type { ProjectConfig } from './config.ts';
 import { formatId, isLegacyId } from './ids.ts';
 import type { IdMigration } from './migrate.ts';
 import { migrateIds } from './migrate.ts';
+import { checkPrerequisites } from './prerequisites.ts';
 import { needsRenumber, rankBetween, renumberRanks } from './rank.ts';
 import { DEFAULT_STATUSES } from './task.ts';
 import type { Task, TaskStatus } from './task.ts';
@@ -54,11 +55,7 @@ class JsonlStore implements TaskStore {
     const now = new Date().toISOString();
     const column = tasks.filter((task) => task.status === draft.status);
 
-    // The counter is written before the task it names: a crash between the two leaves
-    // a gap in the numbering (harmless) rather than two tasks sharing a number (not).
     const id = formatId(config.prefix, config.nextId);
-    await writeConfig(dirname(this.#file), { ...config, nextId: config.nextId + 1 });
-
     const task: Task = {
       id,
       title: draft.title,
@@ -70,7 +67,15 @@ class JsonlStore implements TaskStore {
       created: now,
       updated: now,
       refs: draft.refs,
+      blockedBy: draft.blockedBy,
     };
+    // Checked before the counter is spent, so a bad blockedBy costs nothing but the
+    // rejection — a brand new id cannot already be part of a cycle, only unknown.
+    checkPrerequisites([...tasks, task], task.id);
+
+    // The counter is written before the task it names: a crash between the two leaves
+    // a gap in the numbering (harmless) rather than two tasks sharing a number (not).
+    await writeConfig(dirname(this.#file), { ...config, nextId: config.nextId + 1 });
 
     return this.#writeAndReturn([...tasks, task], task.id, config.prefix, config.statuses);
   }
@@ -94,13 +99,15 @@ class JsonlStore implements TaskStore {
       rank,
       updated: new Date().toISOString(),
     };
+    const next = tasks.map((task) => (task.id === id ? updated : task));
 
-    return this.#writeAndReturn(
-      tasks.map((task) => (task.id === id ? updated : task)),
-      id,
-      config.prefix,
-      config.statuses,
-    );
+    // Only when this patch actually touches blockedBy — an edge nobody is writing this
+    // time is not this write's problem, and re-checking it would fail an unrelated field
+    // update the moment some other task points at an id `remove` has already dropped
+    // (dropping the pointer itself is tt-19, not this).
+    if (patch.blockedBy !== undefined) checkPrerequisites(next, id);
+
+    return this.#writeAndReturn(next, id, config.prefix, config.statuses);
   }
 
   async move(
@@ -135,7 +142,18 @@ class JsonlStore implements TaskStore {
     this.#require(tasks, id);
     await writeTasks(
       this.#file,
-      tasks.filter((task) => task.id !== id),
+      tasks
+        .filter((task) => task.id !== id)
+        // Same shape as renameStatus below: every task carrying a pointer to what is
+        // about to disappear is rewritten in this write, so none is left naming a task
+        // that no longer exists. `updated` is left alone for the same reason
+        // renameStatus leaves it alone below — the edit belongs to whoever deleted the
+        // prerequisite, not to a task that did not ask to change.
+        .map((task) =>
+          task.blockedBy.includes(id)
+            ? { ...task, blockedBy: task.blockedBy.filter((blocked) => blocked !== id) }
+            : task,
+        ),
       config.prefix,
       config.statuses,
     );

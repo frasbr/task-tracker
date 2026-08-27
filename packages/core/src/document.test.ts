@@ -15,6 +15,7 @@ const task: Task = {
   created: '2026-08-19T14:22:00.000Z',
   updated: '2026-08-20T09:00:00.000Z',
   refs: ['src/auth.ts:42-58', 'src/routes.ts'],
+  blockedBy: ['task-tracker-3', 'task-tracker-5'],
 };
 
 /** What survives a round trip: everything the document carries. */
@@ -27,6 +28,7 @@ function roundTrip(input: Task): void {
     category: input.category,
     tags: input.tags,
     refs: input.refs,
+    blockedBy: input.blockedBy,
     notes: input.notes,
   });
 }
@@ -45,6 +47,7 @@ describe('formatTaskDocument', () => {
         'refs:',
         '  - src/auth.ts:42-58',
         '  - src/routes.ts',
+        'blockedBy: [task-tracker-3, task-tracker-5]',
         '---',
         '',
         'redirectTo is double-encoded.',
@@ -62,10 +65,11 @@ describe('formatTaskDocument', () => {
   });
 
   it('writes empty fields without a dangling space', () => {
-    const text = formatTaskDocument({ ...task, category: '', tags: [], refs: [] });
+    const text = formatTaskDocument({ ...task, category: '', tags: [], refs: [], blockedBy: [] });
     assert.match(text, /^category:$/m);
     assert.match(text, /^tags: \[\]$/m);
     assert.match(text, /^refs: \[\]$/m);
+    assert.match(text, /^blockedBy: \[\]$/m);
   });
 
   it('omits rank, created and updated — the store owns those', () => {
@@ -82,7 +86,17 @@ describe('parseTaskDocument', () => {
   });
 
   it('round-trips empty fields', () => {
-    roundTrip({ ...task, notes: '', category: '', tags: [], refs: [] });
+    roundTrip({ ...task, notes: '', category: '', tags: [], refs: [], blockedBy: [] });
+  });
+
+  it('parses blockedBy into the patch', () => {
+    const { patch } = parseTaskDocument('---\nblockedBy: [task-tracker-3, task-tracker-5]\n---\n');
+    assert.deepEqual(patch.blockedBy, ['task-tracker-3', 'task-tracker-5']);
+  });
+
+  it('parses an empty blockedBy into an empty list', () => {
+    const { patch } = parseTaskDocument('---\nblockedBy: []\n---\n');
+    assert.deepEqual(patch.blockedBy, []);
   });
 
   it('round-trips notes containing a horizontal rule', () => {
@@ -98,6 +112,15 @@ describe('parseTaskDocument', () => {
     const block = parseTaskDocument('---\nrefs:\n  - a.ts\n  - b.ts:4\n---\n');
     assert.deepEqual(inline.patch.refs, ['a.ts', 'b.ts:4']);
     assert.deepEqual(block.patch.refs, inline.patch.refs);
+  });
+
+  it('accepts blockedBy inline or one item per line', () => {
+    const inline = parseTaskDocument('---\nblockedBy: [task-tracker-3, task-tracker-5]\n---\n');
+    const block = parseTaskDocument(
+      '---\nblockedBy:\n  - task-tracker-3\n  - task-tracker-5\n---\n',
+    );
+    assert.deepEqual(inline.patch.blockedBy, ['task-tracker-3', 'task-tracker-5']);
+    assert.deepEqual(block.patch.blockedBy, inline.patch.blockedBy);
   });
 
   it('reads an absent id as absent rather than failing', () => {

@@ -56,8 +56,9 @@ When adding to or updating this map:
 - avoid describing specific boundaries - add those instead to the boundaries section below
 
 - **`packages/core/`** — the data model and the store behind it: the `Task` shape, validation,
-  fractional ranks, ID minting, per-project config, and the JSONL implementation of `TaskStore`.
-  Holds no opinion about terminals or editors. Boundaries 1 and 5.
+  whole-store rules like `blockedBy` integrity, fractional ranks, ID minting, per-project
+  config, and the JSONL implementation of `TaskStore`. Holds no opinion about terminals or
+  editors. Boundaries 1, 5 and 12.
 - **`packages/cli/`** — the `tasks` binary: flag parsing, every verb, and two output modes
   (compact lines, and `--json`). Sole writer of the store, and its `--json` output is the contract
   the extension reads. The agent skill is bundled into the binary from here.
@@ -134,7 +135,8 @@ here. The argument for it is in the linked ADR.
 
 6. **Unknown fields are rejected, loudly.** Validation must fail on keys it does not recognise
    rather than storing them. Agents will invent plausible-looking fields; the schema is the
-   defence. ([ADR 0006](docs/adr/0006-ten-fixed-fields-unknown-keys-rejected.md))
+   defence. A task is eleven fields today; adding a twelfth is a design decision, not a
+   tidy-up. ([ADR 0006](docs/adr/0006-ten-fixed-fields-unknown-keys-rejected.md))
 
 7. **`BoardTask` in `protocol.ts` is a deliberate duplicate of the core `Task` type.** Do not
    "fix" the duplication by importing core — that is boundary 2, and the duplication is its
@@ -163,6 +165,16 @@ here. The argument for it is in the linked ADR.
     master copy shipped by `tasks init`, so editing it changes what every other project gets.
     ([ADR 0018](docs/adr/0018-plans-live-in-a-numbered-directory.md))
 
+12. **A rule that needs every task in the store, not just the one being written, lives in its
+    own module in `packages/core/src/`, never inside the JSONL store.** `jsonl.ts` calls it
+    from the write path; a future `TaskStore` implementation calls the same module. This
+    covers a rule that has to answer a question over the whole set — existence, a cycle — not
+    a mechanical rewrite that a write already in progress makes necessary, such as `remove`
+    dropping a deleted id from every `blockedBy` or `renameStatus` rewriting a status name;
+    those stay inline, beside the write that triggers them.
+    ([ADR 0021](docs/adr/0021-whole-store-rules-live-in-core.md),
+    [0022](docs/adr/0022-mechanical-rewrites-stay-with-their-write.md))
+
 ---
 
 ## Decisions
@@ -177,6 +189,11 @@ data-model decisions that have no boundary to enforce them.
 - [0011](docs/adr/0011-filter-and-sort-are-view-state.md) filter and sort as view state
 - [0018](docs/adr/0018-plans-live-in-a-numbered-directory.md) plans as numbered documents
 - [0019](docs/adr/0019-statuses-are-per-project.md) statuses as project config
+- [0020](docs/adr/0020-blocked-by-is-a-separate-field.md) `blockedBy` as its own field
+- [0021](docs/adr/0021-whole-store-rules-live-in-core.md) whole-store rules as their own core
+  module
+- [0022](docs/adr/0022-mechanical-rewrites-stay-with-their-write.md) mechanical rewrites stay
+  with their write
 
 Start at [0001](docs/adr/0001-tasks-are-local-working-memory.md). Tasks are one person's local
 working memory, and every other decision assumes it.

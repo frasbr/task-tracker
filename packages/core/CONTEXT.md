@@ -9,7 +9,7 @@ redefined everywhere.
 ### The task
 
 **Task**:
-One piece of work, held as ten fixed fields. The unit everything else moves, renders or
+One piece of work, held as eleven fixed fields. The unit everything else moves, renders or
 filters.
 _Avoid_: item, ticket, issue, story, todo. A **Card** is a task drawn on the board, defined in
 the Board context.
@@ -33,6 +33,18 @@ _Avoid_: label, keyword, marker
 A pointer into real code, such as `src/auth.ts` or `src/auth.ts:42-58`. What connects a task to
 the thing it is about.
 _Avoid_: link, reference, location, citation
+
+**Prerequisite**:
+A task another task waits on, held in `blockedBy` as a list of ids. The store checks that
+each id names a task that exists and that no chain of prerequisites loops back on itself;
+beyond that it is display only — nothing refuses to move a task whose prerequisites are
+outstanding. Distinct from a **Ref**, which points at code rather than at other work.
+_Avoid_: dependency, parent, blocker, upstream
+
+**Blocked**:
+Said of a task with at least one outstanding prerequisite. A property read off the board, not a
+status — no column means blocked.
+_Avoid_: waiting, stuck, held
 
 ### Identity
 
@@ -117,6 +129,6 @@ and read back again. A projection for editing, never a second place tasks are st
 _Avoid_: frontmatter, markdown file, task file
 
 **Unknown field**:
-A key that is not one of the ten. Always an error, never something to store or ignore. This is
-what keeps the model ten fields wide when agents write to it.
+A key that is not one of the eleven. Always an error, never something to store or ignore. This is
+what keeps the model eleven fields wide when agents write to it.
 _Avoid_: extra field, custom field, extension

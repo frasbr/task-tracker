@@ -13,6 +13,7 @@ const VALID = {
   created: '2026-08-19T10:04:00.000Z',
   updated: '2026-08-19T14:22:00.000Z',
   refs: ['src/auth.ts:42-58'],
+  blockedBy: ['task-tracker-3'],
 };
 
 describe('parseTask', () => {
@@ -87,6 +88,55 @@ describe('parseTask', () => {
     assert.deepEqual(task.refs, ['src/a.ts', 'src/b.ts:42', 'src/c.ts:1-9']);
   });
 
+  it('rejects a blockedBy entry that is not task-id shaped', () => {
+    assert.throws(
+      () => parseTask({ ...VALID, blockedBy: ['not an id'] }, 'test', 'task-tracker'),
+      /not a valid task id/,
+    );
+  });
+
+  it('rejects a blockedBy entry shaped like a file reference, not a task id', () => {
+    assert.throws(
+      () => parseTask({ ...VALID, blockedBy: ['src/auth.ts'] }, 'test', 'task-tracker'),
+      /not a valid task id/,
+    );
+  });
+
+  it('rejects blockedBy that is not an array', () => {
+    assert.throws(
+      () => parseTask({ ...VALID, blockedBy: 'task-tracker-3' }, 'test', 'task-tracker'),
+      /'blockedBy' must be an array/,
+    );
+  });
+
+  it('dedupes blockedBy on the way in', () => {
+    const task = parseTask(
+      { ...VALID, blockedBy: ['task-tracker-3', 'task-tracker-9', 'task-tracker-3'] },
+      'test',
+      'task-tracker',
+    );
+    assert.deepEqual(task.blockedBy, ['task-tracker-3', 'task-tracker-9']);
+  });
+
+  it('defaults blockedBy to [] when the field is absent, for rows written before it existed', () => {
+    const { blockedBy, ...withoutBlockedBy } = VALID;
+    void blockedBy;
+    const task = parseTask(withoutBlockedBy, 'test', 'task-tracker');
+    assert.deepEqual(task.blockedBy, []);
+  });
+
+  it('does not check that a blockedBy id exists or close a cycle — shape only here', () => {
+    // 'task-tracker-7' is VALID's own id (self-block) and 'task-tracker-999' does not
+    // exist in any store this parser can see. Both are shape-valid, so both pass:
+    // existence and cycle checks are a whole-store concern that lives elsewhere.
+    const task = parseTask(
+      { ...VALID, blockedBy: ['task-tracker-7', 'task-tracker-999'] },
+      'test',
+      'task-tracker',
+    );
+    assert.deepEqual(task.blockedBy, ['task-tracker-7', 'task-tracker-999']);
+  });
+
   it('normalises tags: trimmed, deduplicated, sorted', () => {
     const task = parseTask({ ...VALID, tags: [' ui ', 'bug', 'ui'] }, 'test', 'task-tracker');
     assert.deepEqual(task.tags, ['bug', 'ui']);
@@ -136,6 +186,7 @@ describe('parseDraft', () => {
       tags: [],
       status: 'backlog',
       refs: [],
+      blockedBy: [],
     });
   });
 
@@ -147,6 +198,37 @@ describe('parseDraft', () => {
   it('requires a title', () => {
     assert.throws(() => parseDraft({ notes: 'orphan' }), /'title'/);
     assert.throws(() => parseDraft({ title: '   ' }), /cannot be empty/);
+  });
+
+  it('dedupes blockedBy on the way in', () => {
+    const draft = parseDraft({
+      title: 'x',
+      blockedBy: ['task-tracker-3', 'task-tracker-3', 'task-tracker-9'],
+    });
+    assert.deepEqual(draft.blockedBy, ['task-tracker-3', 'task-tracker-9']);
+  });
+
+  it('rejects a malformed blockedBy entry', () => {
+    assert.throws(() => parseDraft({ title: 'x', blockedBy: ['nope'] }), /not a valid task id/);
+  });
+
+  it('round-trips through create then read: the deduped list survives a full draft-to-store cycle', () => {
+    const draft = parseDraft({
+      title: 'x',
+      blockedBy: ['task-tracker-3', 'task-tracker-3', 'task-tracker-9'],
+    });
+
+    // Simulate what the store does: allocate the fields a draft does not carry, and
+    // read the result back the way a line from tasks.jsonl is read.
+    const stored = {
+      id: 'task-tracker-42',
+      ...draft,
+      rank: 'V',
+      created: VALID.created,
+      updated: VALID.updated,
+    };
+    const task = parseTask(stored, 'test', 'task-tracker');
+    assert.deepEqual(task.blockedBy, ['task-tracker-3', 'task-tracker-9']);
   });
 });
 
@@ -162,5 +244,15 @@ describe('parsePatch', () => {
   it('refuses immutable fields', () => {
     assert.throws(() => parsePatch({ id: 't2k4m9x7q' }), /unknown field 'id'/);
     assert.throws(() => parsePatch({ created: VALID.created }), /unknown field 'created'/);
+  });
+
+  it('sets blockedBy, deduped, when present', () => {
+    assert.deepEqual(parsePatch({ blockedBy: ['task-tracker-3', 'task-tracker-3'] }), {
+      blockedBy: ['task-tracker-3'],
+    });
+  });
+
+  it('rejects a malformed blockedBy entry', () => {
+    assert.throws(() => parsePatch({ blockedBy: ['nope'] }), /not a valid task id/);
   });
 });

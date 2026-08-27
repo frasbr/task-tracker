@@ -1,5 +1,5 @@
 /**
- * The task model. Ten fields, fixed.
+ * The task model. Eleven fields, fixed.
  *
  * Adding a field here is a design decision, not an implementation detail —
  * see AGENTS.md before you extend this type.
@@ -47,6 +47,12 @@ export interface Task {
   /** ISO 8601. Touched on every write. */
   updated: string;
   refs: TaskRef[];
+  /**
+   * Ids of tasks this one waits on. The store rejects an id that does not exist and an
+   * edge that would close a cycle (see prerequisites.ts) — but display only otherwise:
+   * nothing here refuses to move a task whose prerequisites are outstanding.
+   */
+  blockedBy: string[];
 }
 
 /** True when `value` is one of `statuses`. Defaults to the four names a fresh project has. */
