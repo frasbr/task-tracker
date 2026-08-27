@@ -143,24 +143,16 @@ export const COMMAND_HELP: Readonly<Record<string, string>> = {
   tasks remove 7
   tasks remove 7 --force`,
 
-  status: `tasks status — list or change the project's columns
+  status: `tasks status — list the columns
 
-  The columns are per-project, kept in .tasks/config.json and ordered left to right on
-  the board. Agents: read them, do not assume them — the four defaults are a starting
-  point, not the schema.
+  Four columns, fixed, left to right on the board: backlog, priority, in-progress, done.
+  They are the schema rather than a per-project setting, so there is nothing to add,
+  rename, reorder or remove. Only done carries meaning for the tool — a prerequisite
+  anywhere else is unfinished, which is what makes a card read as blocked.
 
-  list                       print the statuses in board order (--json for an array)
-  add <name>                 add a column; --after=<status> or --before=<status> to
-                             place it, otherwise it goes last
-  rename <old> <new>         rename a column, moving its tasks with it in one write
-  reorder <name>             move a column; --after=<status> or --before=<status>
-  remove <name>              delete a column; --move-to=<status> says where its tasks
-                             go, required unless the column is empty
+  list                       print the four in board order (--json for an array)
 
-  tasks status list
-  tasks status add review --after=in-progress
-  tasks status rename priority next-up
-  tasks status remove review --move-to=backlog`,
+  tasks status list`,
 
   'migrate-ids': `tasks migrate-ids — convert a store's pre-prefix task IDs
 

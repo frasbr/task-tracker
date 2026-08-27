@@ -500,13 +500,16 @@ async function remove(
 }
 
 /**
- * `tasks status …` — the only way a project's columns change. Every subcommand routes to
- * a core store method that owns the atomic write; this handler only parses arguments and
- * reports. Semantic failures (an unknown status, a non-empty column removed without a
- * destination) are the store's to raise, so their rules live in one place.
+ * `tasks status` — read the columns. There is nothing to write: the four are the schema,
+ * not a setting.
+ *
+ * The four mutating subcommands are answered by name rather than falling through to the
+ * unknown-subcommand default below. Someone typing `tasks status rename` is working from
+ * a memory of a command that existed, and "not a subcommand" would read as a typo instead
+ * of as a removal.
  */
 async function status(args: ParsedArgs, io: Io, store: TaskStore): Promise<number> {
-  const [sub, ...rest] = args.positionals;
+  const [sub] = args.positionals;
 
   switch (sub) {
     case undefined:
@@ -516,63 +519,22 @@ async function status(args: ParsedArgs, io: Io, store: TaskStore): Promise<numbe
       io.out(flagSet(args, 'json') ? JSON.stringify(statuses) : statuses.join('\n'));
       return EXIT_OK;
     }
-    case 'add': {
-      rejectUnknownFlags(args, ['after', 'before'], 'status add');
-      const name = oneStatusName(rest, 'status add', '<name>');
-      const statuses = await store.addStatus(name, positionFrom(args));
-      io.out(`Added status '${name}'.  ${statuses.join(' · ')}`);
-      return EXIT_OK;
-    }
-    case 'rename': {
-      rejectUnknownFlags(args, [], 'status rename');
-      const [from, to, ...extra] = rest;
-      if (from === undefined || to === undefined || extra.length > 0) {
-        throw new UsageError('status rename: expected `tasks status rename <old> <new>`.');
-      }
-      const statuses = await store.renameStatus(from, to);
-      io.out(`Renamed '${from}' to '${to}'.  ${statuses.join(' · ')}`);
-      return EXIT_OK;
-    }
-    case 'reorder': {
-      rejectUnknownFlags(args, ['after', 'before'], 'status reorder');
-      const name = oneStatusName(rest, 'status reorder', '<name> [--after=|--before=]');
-      const statuses = await store.reorderStatus(name, positionFrom(args));
-      io.out(`Reordered.  ${statuses.join(' · ')}`);
-      return EXIT_OK;
-    }
-    case 'remove': {
-      rejectUnknownFlags(args, ['move-to'], 'status remove');
-      const name = oneStatusName(rest, 'status remove', '<name> [--move-to=<status>]');
-      const statuses = await store.removeStatus(name, flagValue(args, 'move-to'));
-      io.out(`Removed status '${name}'.  ${statuses.join(' · ')}`);
-      return EXIT_OK;
-    }
-    default:
+    case 'add':
+    case 'rename':
+    case 'reorder':
+    case 'remove':
       throw new UsageError(
-        `status: '${sub}' is not a subcommand. Use list, add, rename, reorder or remove.`,
+        `status ${sub}: the columns are fixed and cannot be changed. ` +
+          'They are backlog, priority, in-progress and done, in that order, and they are ' +
+          'part of the schema rather than a per-project setting. Use `tasks status list` ' +
+          'to read them.',
       );
+    default:
+      throw new UsageError(`status: '${sub}' is not a subcommand. Use list.`);
   }
-}
-
-/** The single status name a `status` subcommand takes, or a usage error naming the shape. */
-function oneStatusName(positionals: readonly string[], command: string, shape: string): string {
-  const [name, ...extra] = positionals;
-  if (name === undefined || extra.length > 0) {
-    throw new UsageError(`${command}: expected \`tasks ${command} ${shape}\`.`);
-  }
-  return name;
 }
 
 /** Reads `--after`/`--before` into a position, or `undefined` when neither is given. */
-function positionFrom(args: ParsedArgs): { after?: string; before?: string } | undefined {
-  const after = flagValue(args, 'after');
-  const before = flagValue(args, 'before');
-  if (after === undefined && before === undefined) return undefined;
-  const position: { after?: string; before?: string } = {};
-  if (after !== undefined) position.after = after;
-  if (before !== undefined) position.before = before;
-  return position;
-}
 
 // ---------------------------------------------------------------- helpers
 

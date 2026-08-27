@@ -783,7 +783,7 @@ describe('the shell contract', () => {
 });
 
 describe('status', () => {
-  it('lists the project statuses, and as JSON', async () => {
+  it('lists the four statuses, and as JSON', async () => {
     await ok('init');
     assert.equal((await ok('status', 'list')).out, DEFAULT_STATUSES.join('\n'));
     assert.deepEqual(await json<string[]>('status', 'list'), [...DEFAULT_STATUSES]);
@@ -791,57 +791,29 @@ describe('status', () => {
     assert.equal((await ok('status')).out, DEFAULT_STATUSES.join('\n'));
   });
 
-  it('adds a status, then lets a task be put in it', async () => {
+  it('rejects each removed subcommand by name, not as a typo', async () => {
     await ok('init');
-    const added = await ok('status', 'add', 'review', '--after=in-progress');
-    assert.match(added.out, /Added status 'review'/);
-    assert.deepEqual(await json<string[]>('status', 'list'), [
-      'backlog',
-      'priority',
-      'in-progress',
-      'review',
-      'done',
-    ]);
-
-    // The CLI now accepts the new column where it would have rejected it before.
-    await ok('add', 'Look at the PR', '--status=review');
-    const [task] = await json<Task[]>('list', '--status=review');
-    assert.equal(task!.status, 'review');
-    await ok('move', task!.id, 'done');
-    assert.equal((await json<Task[]>('list', '--status=done'))[0]!.id, task!.id);
+    for (const sub of ['add', 'rename', 'reorder', 'remove']) {
+      const result = await tasks('status', sub, 'review');
+      assert.equal(result.code, EXIT_USAGE, `status ${sub} should exit 2`);
+      assert.match(result.err, /columns are fixed and cannot be changed/);
+      // Named, rather than falling through to the unknown-subcommand default — someone
+      // typing this remembers a command that existed and should be told it is gone.
+      assert.doesNotMatch(result.err, /not a subcommand/);
+    }
   });
 
-  it('renames a status and carries its tasks with it', async () => {
+  it('leaves the columns alone when a removed subcommand is refused', async () => {
     await ok('init');
-    await ok('add', 'A task', '--status=priority');
-    await ok('status', 'rename', 'priority', 'next-up');
-    const [task] = await json<Task[]>('list', '--status=next-up');
-    assert.equal(task!.title, 'A task');
+    await tasks('status', 'add', 'review', '--after=in-progress');
+    await tasks('status', 'rename', 'priority', 'next-up');
+    assert.deepEqual(await json<string[]>('status', 'list'), [...DEFAULT_STATUSES]);
   });
 
-  it('reorders a status', async () => {
+  it('still refuses a status the project does not have', async () => {
     await ok('init');
-    await ok('status', 'reorder', 'done', '--before=backlog');
-    assert.deepEqual(await json<string[]>('status', 'list'), [
-      'done',
-      'backlog',
-      'priority',
-      'in-progress',
-    ]);
-  });
-
-  it('refuses to remove a non-empty status without --move-to, then obeys it', async () => {
-    await ok('init');
-    await ok('add', 'Stuck task', '--status=priority');
-
-    const refused = await tasks('status', 'remove', 'priority');
-    assert.equal(refused.code, EXIT_FAILED);
-    assert.match(refused.err, /still holds 1 task/);
-
-    await ok('status', 'remove', 'priority', '--move-to=backlog');
-    assert.ok(!(await json<string[]>('status', 'list')).includes('priority'));
-    const [task] = await json<Task[]>('list', '--status=backlog');
-    assert.equal(task!.title, 'Stuck task');
+    const result = await tasks('add', 'Look at the PR', '--status=review');
+    assert.notEqual(result.code, EXIT_OK);
   });
 
   it('reports an unknown subcommand as a usage error', async () => {

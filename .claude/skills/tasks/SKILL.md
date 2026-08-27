@@ -40,9 +40,8 @@ parse the output rather than read it.
 `tasks update <id> --markdown` reads that document back from stdin. Reach for it when you are
 rewriting several fields at once; single changes are clearer as flags.
 
-Start of a work session: run `tasks status list` first, so you use this project's real column
-names, then `tasks list --status=in-progress` and `tasks list --status=priority`. That is
-usually all the context you need.
+Start of a work session: `tasks list --status=in-progress`, then
+`tasks list --status=priority`. That is usually all the context you need.
 
 ## Writing
 
@@ -66,22 +65,25 @@ itself), is rejected with exit 2 — fix the id or the edge rather than retrying
 
 ## Statuses
 
-Statuses are **per-project**, not a fixed set. Look them up; do not assume them. A fresh project
-starts with `backlog`, `priority`, `in-progress`, `done`, but any project can rename, reorder,
-add, or remove columns — so the names above are a starting point, not the schema.
+Four columns, fixed, in board order. They are the schema, not a setting, and no project has
+different ones:
+
+| Column        | Means                                              |
+| ------------- | -------------------------------------------------- |
+| `backlog`     | Not started and not chosen. Where a new task lands. |
+| `priority`    | Chosen to do next.                                  |
+| `in-progress` | Being worked on now.                                |
+| `done`        | Finished.                                           |
+
+`done` is the only one the tool reads meaning from: a prerequisite sitting anywhere else is
+unfinished, which is what makes a card read as blocked.
 
 ```bash
-tasks status list                        # this project's columns, in board order
-tasks status add review --after=in-progress
-tasks status rename priority next-up     # moves the tasks in it too, in one write
-tasks status reorder review --before=done
-tasks status remove review --move-to=backlog   # --move-to required if the column has tasks
+tasks status list                        # prints the four, in board order
 ```
 
-Run `tasks status list` at the start of a session. If a `move` or an `add --status=` is rejected
-with "not a status", that is the CLI telling you the column does not exist here — read the list
-it prints and use a real name, or add the column deliberately with `tasks status add`. Do not
-invent a column by writing a status the project does not have.
+Writing any other name is an error. There is no way to add a column, and nothing to look up
+before you start.
 
 ## When to do what
 
@@ -140,7 +142,7 @@ reasoning only in a task.
 4. Move a task to `in-progress` when you start it, not when you finish it. The board is a live
    picture, multiple actors might be working on it simultaneously, and the human is tracking it.
 5. Quote task IDs when you mention a task to the human, so they can find the card.
-6. Look up statuses with `tasks status list`; never assume the four defaults, and never write a
-   status the project does not have. Change columns only through `tasks status`.
+6. The four statuses are fixed: `backlog`, `priority`, `in-progress`, `done`. Assume them —
+   there is nothing to look up and no way to add a fifth.
 7. A plan document is the reasoning, the board is the state. Do not duplicate one into the
    other.
