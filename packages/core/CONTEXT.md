@@ -71,8 +71,8 @@ _Avoid_: upgrade, conversion
 ### Columns and ordering
 
 **Status**:
-The column a task is in, named by the project rather than fixed by the schema. Both the field
-on the task and the entry in the project's ordered list.
+The column a task is in: one of the four fixed names, `backlog`, `priority`, `in-progress`,
+`done`. `done` is terminal — the only one code branches on.
 _Avoid_: state, stage, phase, bucket
 
 **Column**:
@@ -109,8 +109,9 @@ current implementation and callers are not allowed to know that.
 _Avoid_: database, file, backend, storage layer
 
 **Config**:
-A project's own settings beside its store. The id prefix, the counter that mints the next
-number, and the ordered status list.
+A project's own settings beside its store. The id prefix and the counter that mints the next
+number. The four statuses used to live here too, back when they were per-project; they are the
+schema now, fixed in code, and a config is not asked.
 _Avoid_: settings, preferences, options
 
 **Draft**:

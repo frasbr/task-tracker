@@ -193,7 +193,7 @@ async function init(args: ParsedArgs, io: Io, directory: string): Promise<number
   const explicitPrefix = flagValue(args, 'prefix');
   const prefix =
     explicitPrefix !== undefined ? checkedPrefix(explicitPrefix) : await defaultPrefix(directory);
-  await writeConfig(storeDir, { prefix, nextId: 1, statuses: [...STATUSES] });
+  await writeConfig(storeDir, { prefix, nextId: 1 });
   io.out(
     explicitPrefix === undefined
       ? `Using task ID prefix '${prefix}', from the project directory. Override with --prefix.`
@@ -268,7 +268,6 @@ async function add(
         refs: flagList(args, 'refs'),
         blockedBy: flagList(args, 'blocked-by'),
       }),
-      statusesOf(config),
     );
 
     const task = await store.create(draft);
@@ -292,7 +291,7 @@ async function list(
 
   const filter: TaskFilter = {};
   const wanted = flagList(args, 'status');
-  if (wanted !== undefined) filter.status = wanted.map((s) => asStatus(s, statusesOf(config)));
+  if (wanted !== undefined) filter.status = wanted.map((s) => asStatus(s));
 
   const category = flagValue(args, 'category');
   if (category !== undefined) filter.category = category;
@@ -317,7 +316,7 @@ async function list(
   }
 
   io.out(formatList(tasks));
-  if (!filtered) io.out(`\n${formatSummary(tasks, statusesOf(config))}`);
+  if (!filtered) io.out(`\n${formatSummary(tasks)}`);
   return EXIT_OK;
 }
 
@@ -362,7 +361,7 @@ async function update(
 
   return rejectingBlockedByAsUsage(async () => {
     const patch = flagSet(args, 'markdown')
-      ? await patchFromDocument(args, io, id, config)
+      ? await patchFromDocument(args, io, id)
       : parsePatch(
           compact({
             title: flagValue(args, 'title'),
@@ -373,7 +372,6 @@ async function update(
             refs: flagList(args, 'refs'),
             blockedBy: flagList(args, 'blocked-by'),
           }),
-          statusesOf(config),
         );
 
     const task = await store.update(id, patch);
@@ -387,12 +385,7 @@ async function update(
  * writes. This is how the extension saves an editor buffer, and it is deliberately the
  * same path a person gets with `tasks update <id> --markdown < task.md`.
  */
-async function patchFromDocument(
-  args: ParsedArgs,
-  io: Io,
-  id: string,
-  config: ProjectConfig | undefined,
-): Promise<TaskPatch> {
+async function patchFromDocument(args: ParsedArgs, io: Io, id: string): Promise<TaskPatch> {
   const conflicting = UPDATE_FIELD_FLAGS.filter((flag) => args.flags.has(flag));
   if (conflicting.length > 0) {
     throw new UsageError(
@@ -404,7 +397,7 @@ async function patchFromDocument(
     throw new UsageError('update: --markdown reads the document from stdin, which is unavailable.');
   }
 
-  const document = parseTaskDocument(await io.input(), statusesOf(config), 'update');
+  const document = parseTaskDocument(await io.input(), 'update');
 
   // A document carries the id it was rendered from. Disagreeing with the argument means
   // text was pasted between tasks, and writing it anyway would overwrite the wrong one.
@@ -428,7 +421,7 @@ async function move(
   const [rawId, status, ...rest] = args.positionals;
   if (rawId === undefined || status === undefined || rest.length > 0) {
     throw new UsageError(
-      `move: expected \`tasks move <id> <status>\`. Statuses: ${statusesOf(config).join(', ')}.`,
+      `move: expected \`tasks move <id> <status>\`. Statuses: ${STATUSES.join(', ')}.`,
     );
   }
   const id = resolveId(rawId, config);
@@ -441,7 +434,7 @@ async function move(
 
   const task = await store.move(
     id,
-    asStatus(status, statusesOf(config)),
+    asStatus(status),
     Object.keys(position).length > 0 ? position : undefined,
   );
   emit(args, io, task, `Moved ${task.id} to ${task.status}  ${task.title}`);
@@ -695,14 +688,9 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** The project's configured statuses, or the defaults for a store with no config yet. */
-function statusesOf(config: ProjectConfig | undefined): string[] {
-  return config?.statuses ?? [...STATUSES];
-}
-
-function asStatus(value: string, statuses: readonly string[]): TaskStatus {
+function asStatus(value: string): TaskStatus {
   if (!isTaskStatus(value)) {
-    throw new UsageError(`'${value}' is not a status. Use one of: ${statuses.join(', ')}.`);
+    throw new UsageError(`'${value}' is not a status. Use one of: ${STATUSES.join(', ')}.`);
   }
   return value;
 }

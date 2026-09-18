@@ -3,15 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-import {
-  ConfigError,
-  checkPrefix,
-  checkStatusList,
-  readConfig,
-  sanitizePrefix,
-  writeConfig,
-} from './config.ts';
-import { STATUSES } from './task.ts';
+import { ConfigError, checkPrefix, readConfig, sanitizePrefix, writeConfig } from './config.ts';
 
 describe('sanitizePrefix', () => {
   it('lowercases', () => {
@@ -66,50 +58,37 @@ describe('readConfig / writeConfig', () => {
   });
 
   it('round-trips what it wrote', async () => {
-    await writeConfig(dir, { prefix: 'demo', nextId: 5, statuses: ['todo', 'doing', 'done'] });
-    assert.deepEqual(await readConfig(dir), {
-      prefix: 'demo',
-      nextId: 5,
-      statuses: ['todo', 'doing', 'done'],
-    });
+    await writeConfig(dir, { prefix: 'demo', nextId: 5 });
+    assert.deepEqual(await readConfig(dir), { prefix: 'demo', nextId: 5 });
   });
 
   it('refuses to write a prefix with a digit-only segment', async () => {
-    await assert.rejects(
-      writeConfig(dir, { prefix: 'foo-2', nextId: 1, statuses: [...STATUSES] }),
-      ConfigError,
-    );
+    await assert.rejects(writeConfig(dir, { prefix: 'foo-2', nextId: 1 }), ConfigError);
   });
 
-  it('defaults statuses when the key is absent, so a phase-6 config still reads', async () => {
-    await writeFile(join(dir, 'config.json'), JSON.stringify({ prefix: 'demo', nextId: 1 }));
-    assert.deepEqual(await readConfig(dir), {
-      prefix: 'demo',
-      nextId: 1,
-      statuses: [...STATUSES],
+  it('accepts and ignores a legacy statuses key naming exactly the four columns', async () => {
+    await writeFile(
+      join(dir, 'config.json'),
+      JSON.stringify({
+        prefix: 'demo',
+        nextId: 1,
+        statuses: ['backlog', 'priority', 'in-progress', 'done'],
+      }),
+    );
+    assert.deepEqual(await readConfig(dir), { prefix: 'demo', nextId: 1 });
+  });
+
+  it('rejects a legacy statuses key naming anything other than the four columns', async () => {
+    await writeFile(
+      join(dir, 'config.json'),
+      JSON.stringify({ prefix: 'demo', nextId: 1, statuses: ['todo', 'doing', 'done'] }),
+    );
+    await assert.rejects(readConfig(dir), (error: unknown) => {
+      assert.ok(error instanceof ConfigError);
+      assert.match(error.message, /'statuses' is/);
+      assert.match(error.message, /backlog, priority, in-progress, done/);
+      return true;
     });
-  });
-
-  it('rejects an empty status list', async () => {
-    await writeFile(
-      join(dir, 'config.json'),
-      JSON.stringify({ prefix: 'demo', nextId: 1, statuses: [] }),
-    );
-    await assert.rejects(readConfig(dir), ConfigError);
-  });
-
-  it('rejects a status with whitespace or a duplicate', async () => {
-    await writeFile(
-      join(dir, 'config.json'),
-      JSON.stringify({ prefix: 'demo', nextId: 1, statuses: ['in progress'] }),
-    );
-    await assert.rejects(readConfig(dir), ConfigError);
-
-    await writeFile(
-      join(dir, 'config.json'),
-      JSON.stringify({ prefix: 'demo', nextId: 1, statuses: ['todo', 'todo'] }),
-    );
-    await assert.rejects(readConfig(dir), ConfigError);
   });
 
   it('rejects malformed JSON', async () => {
@@ -123,25 +102,8 @@ describe('readConfig / writeConfig', () => {
   });
 
   it('leaves no temporary files behind', async () => {
-    await writeConfig(dir, { prefix: 'demo', nextId: 1, statuses: [...STATUSES] });
+    await writeConfig(dir, { prefix: 'demo', nextId: 1 });
     const contents = await readFile(join(dir, 'config.json'), 'utf8');
-    assert.deepEqual(JSON.parse(contents), {
-      prefix: 'demo',
-      nextId: 1,
-      statuses: [...STATUSES],
-    });
-  });
-});
-
-describe('checkStatusList', () => {
-  it('trims each name and preserves order', () => {
-    assert.deepEqual(checkStatusList([' backlog ', 'done'], 'config'), ['backlog', 'done']);
-  });
-
-  it('rejects a non-array, an empty list, whitespace, and duplicates', () => {
-    assert.throws(() => checkStatusList('todo', 'config'), ConfigError);
-    assert.throws(() => checkStatusList([], 'config'), ConfigError);
-    assert.throws(() => checkStatusList(['in progress'], 'config'), ConfigError);
-    assert.throws(() => checkStatusList(['a', 'a'], 'config'), ConfigError);
+    assert.deepEqual(JSON.parse(contents), { prefix: 'demo', nextId: 1 });
   });
 });

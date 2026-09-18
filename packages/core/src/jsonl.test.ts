@@ -465,22 +465,14 @@ describe('project config', () => {
   it('gives a fresh empty store a default prefix and starts counting at 1', async () => {
     const task = await store.create(draft('First'));
     assert.equal(task.id, 'task-1');
-    assert.deepEqual(await readConfig(dir), {
-      prefix: 'task',
-      nextId: 2,
-      statuses: [...STATUSES],
-    });
+    assert.deepEqual(await readConfig(dir), { prefix: 'task', nextId: 2 });
   });
 
   it('mints ids from a prefix set before any task existed', async () => {
-    await writeConfig(dir, { prefix: 'demo', nextId: 5, statuses: [...STATUSES] });
+    await writeConfig(dir, { prefix: 'demo', nextId: 5 });
     const task = await store.create(draft('First'));
     assert.equal(task.id, 'demo-5');
-    assert.deepEqual(await readConfig(dir), {
-      prefix: 'demo',
-      nextId: 6,
-      statuses: [...STATUSES],
-    });
+    assert.deepEqual(await readConfig(dir), { prefix: 'demo', nextId: 6 });
   });
 
   it('never reuses a number across the counter, even across store instances', async () => {
@@ -503,15 +495,14 @@ describe('project config', () => {
   });
 
   it("rejects a task carrying a different project's prefix", async () => {
-    await writeConfig(dir, { prefix: 'demo', nextId: 1, statuses: [...STATUSES] });
+    await writeConfig(dir, { prefix: 'demo', nextId: 1 });
     const task = await store.create(draft('X'));
     await writeFile(file, `${JSON.stringify({ ...task, id: 'other-3' })}\n`);
 
     await assert.rejects(store.list(), /not a valid task ID/);
   });
 
-  it('rejects a status outside the four fixed columns, even one a hand-edited config lists', async () => {
-    await writeConfig(dir, { prefix: 'task', nextId: 1, statuses: ['triage', 'shipped'] });
+  it('rejects a task status outside the four fixed columns', async () => {
     const task = await store.create(draft('X', { status: 'backlog' }));
     await writeFile(file, `${JSON.stringify({ ...task, status: 'triage' })}\n`);
 
@@ -556,11 +547,7 @@ describe('migrateStore', () => {
 
     const migration = await migrateStore(file, 'demo');
 
-    assert.deepEqual(migration.config, {
-      prefix: 'demo',
-      nextId: 3,
-      statuses: [...STATUSES],
-    });
+    assert.deepEqual(migration.config, { prefix: 'demo', nextId: 3 });
     assert.deepEqual(Object.fromEntries(migration.mapping), {
       t1ep9qf7v: 'demo-1',
       t4cygkdpg: 'demo-2',
@@ -574,11 +561,7 @@ describe('migrateStore', () => {
     assert.equal(byTitle('Older').notes, 'See also demo-2.');
     assert.equal(byTitle('Newer').id, 'demo-2');
     assert.equal(byTitle('Newer').title, 'Newer task, references demo-1');
-    assert.deepEqual(await readConfig(dir), {
-      prefix: 'demo',
-      nextId: 3,
-      statuses: [...STATUSES],
-    });
+    assert.deepEqual(await readConfig(dir), { prefix: 'demo', nextId: 3 });
   });
 
   it('leaves an already-qualified id untouched and does not consume a number for it', async () => {

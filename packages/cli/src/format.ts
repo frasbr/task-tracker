@@ -1,3 +1,4 @@
+import { STATUSES } from '@task-tracker/core';
 import type { Task } from '@task-tracker/core';
 
 /**
@@ -38,14 +39,11 @@ export function formatList(tasks: readonly Task[]): string {
   return tasks.map((task) => formatLine(task, widths)).join('\n');
 }
 
-/**
- * A count per column, for the empty case and for `tasks list` with no filter. The columns
- * and their order are the project's own, passed in rather than assumed.
- */
-export function formatSummary(tasks: readonly Task[], statuses: readonly string[]): string {
-  const counts = new Map<string, number>(statuses.map((status) => [status, 0]));
+/** A count per column, for the empty case and for `tasks list` with no filter. */
+export function formatSummary(tasks: readonly Task[]): string {
+  const counts = new Map<string, number>(STATUSES.map((status) => [status, 0]));
   for (const task of tasks) counts.set(task.status, (counts.get(task.status) ?? 0) + 1);
-  return statuses.map((status) => `${status} ${counts.get(status) ?? 0}`).join('  ·  ');
+  return STATUSES.map((status) => `${status} ${counts.get(status) ?? 0}`).join('  ·  ');
 }
 
 /** One task in full, for `tasks show`. */

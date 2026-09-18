@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { migrateIds } from './migrate.ts';
-import { STATUSES } from './task.ts';
 import type { Task } from './task.ts';
 
 function task(overrides: Partial<Task> & Pick<Task, 'id' | 'created'>): Task {
@@ -32,11 +31,7 @@ describe('migrateIds', () => {
 
     assert.equal(migration.mapping.get('t1ep9qf7v'), 'demo-1');
     assert.equal(migration.mapping.get('t4cygkdpg'), 'demo-2');
-    assert.deepEqual(migration.config, {
-      prefix: 'demo',
-      nextId: 3,
-      statuses: [...STATUSES],
-    });
+    assert.deepEqual(migration.config, { prefix: 'demo', nextId: 3 });
   });
 
   it('rewrites cross-references in both title and notes', () => {

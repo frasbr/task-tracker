@@ -135,10 +135,10 @@ function checkTags(value: unknown, where: string): string[] {
   return [...new Set(tags)].sort();
 }
 
-function checkStatus(value: unknown, where: string, statuses: readonly string[]): Task['status'] {
+function checkStatus(value: unknown, where: string): Task['status'] {
   if (!isTaskStatus(value)) {
     fail(
-      `${where}: '${String(value)}' is not a status. Use one of: ${statuses.join(', ')}.`,
+      `${where}: '${String(value)}' is not a status. Use one of: ${STATUSES.join(', ')}.`,
       'status',
     );
   }
@@ -214,17 +214,8 @@ function checkBlockedBy(value: unknown, where: string): string[] {
  * from a migration reading a store that still has legacy ids: it skips the shape check
  * and requires nothing more than a non-empty string, since the id is about to be
  * replaced anyway.
- *
- * `status` is checked against the four fixed columns regardless of what `statuses` is
- * passed — `statuses` only names the list in the error message. It still comes from the
- * store's config today; see docs/plans/0003-four-static-columns.md.
  */
-export function parseTask(
-  input: unknown,
-  where: string,
-  prefix: string | undefined,
-  statuses: readonly string[] = STATUSES,
-): Task {
+export function parseTask(input: unknown, where: string, prefix: string | undefined): Task {
   const record = asRecord(input, where);
   rejectUnknownFields(record, TASK_FIELDS, where);
 
@@ -250,7 +241,7 @@ export function parseTask(
     notes: checkNotes(record['notes'], where),
     category: checkCategory(record['category'], where),
     tags: checkTags(record['tags'], where),
-    status: checkStatus(record['status'], where, statuses),
+    status: checkStatus(record['status'], where),
     rank: checkRank(record['rank'], where),
     created: checkTimestamp(record['created'], 'created', where),
     updated: checkTimestamp(record['updated'], 'updated', where),
@@ -261,14 +252,10 @@ export function parseTask(
 
 /**
  * Parses and normalises a new task's fields. The store allocates id, rank and timestamps.
- * An absent status defaults to the first configured column — a new task lands at the head
- * of the board, whatever that column is named.
+ * An absent status defaults to the first of the four columns — a new task lands in
+ * `backlog`.
  */
-export function parseDraft(
-  input: unknown,
-  statuses: readonly string[] = STATUSES,
-  where = 'new task',
-): TaskDraft {
+export function parseDraft(input: unknown, where = 'new task'): TaskDraft {
   const record = asRecord(input, where);
   rejectUnknownFields(record, DRAFT_FIELDS, where);
 
@@ -277,7 +264,7 @@ export function parseDraft(
     notes: 'notes' in record ? checkNotes(record['notes'], where) : '',
     category: 'category' in record ? checkCategory(record['category'], where) : '',
     tags: 'tags' in record ? checkTags(record['tags'], where) : [],
-    status: 'status' in record ? checkStatus(record['status'], where, statuses) : STATUSES[0],
+    status: 'status' in record ? checkStatus(record['status'], where) : STATUSES[0],
     refs: 'refs' in record ? checkRefs(record['refs'], where) : [],
     blockedBy: 'blockedBy' in record ? checkBlockedBy(record['blockedBy'], where) : [],
   };
@@ -286,11 +273,7 @@ export function parseDraft(
 }
 
 /** Parses a partial update. Absent fields are left alone; present ones are validated. */
-export function parsePatch(
-  input: unknown,
-  statuses: readonly string[] = STATUSES,
-  where = 'update',
-): TaskPatch {
+export function parsePatch(input: unknown, where = 'update'): TaskPatch {
   const record = asRecord(input, where);
   rejectUnknownFields(record, PATCH_FIELDS, where);
 
@@ -303,7 +286,7 @@ export function parsePatch(
   if ('notes' in record) patch.notes = checkNotes(record['notes'], where);
   if ('category' in record) patch.category = checkCategory(record['category'], where);
   if ('tags' in record) patch.tags = checkTags(record['tags'], where);
-  if ('status' in record) patch.status = checkStatus(record['status'], where, statuses);
+  if ('status' in record) patch.status = checkStatus(record['status'], where);
   if ('rank' in record) patch.rank = checkRank(record['rank'], where);
   if ('refs' in record) patch.refs = checkRefs(record['refs'], where);
   if ('blockedBy' in record) patch.blockedBy = checkBlockedBy(record['blockedBy'], where);

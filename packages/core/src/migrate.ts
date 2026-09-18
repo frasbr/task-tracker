@@ -1,7 +1,6 @@
 import { checkPrefix } from './config.ts';
 import type { ProjectConfig } from './config.ts';
 import { formatId, isLegacyId, parseId, rewriteLegacyIds } from './ids.ts';
-import { STATUSES } from './task.ts';
 import type { Task } from './task.ts';
 
 /**
@@ -55,9 +54,8 @@ export function migrateIds(tasks: readonly Task[], prefix: string): IdMigration 
     notes: rewriteLegacyIds(task.notes, mapping),
   }));
 
-  // A migrating store predates statuses; it adopts the defaults, same as a fresh one.
   return {
-    config: { prefix, nextId: next, statuses: [...STATUSES] },
+    config: { prefix, nextId: next },
     tasks: migrated,
     mapping,
   };

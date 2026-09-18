@@ -6,18 +6,18 @@ import { STATUSES } from './task.ts';
 /**
  * The project's own config: `.tasks/config.json`, beside the store it configures.
  *
- * It holds the ID prefix and the counter that mints the next number (the counter is
+ * It holds the ID prefix and the counter that mints the next number — the counter is
  * monotonic and never derived from the tasks present, so a number retired by deleting a
- * task never comes back pointing at something else), plus a status list. `status` is now
- * validated against the fixed four in `task.ts`, not against this list — see
- * docs/plans/0003-four-static-columns.md, which is in the middle of removing this field.
+ * task never comes back pointing at something else.
+ *
+ * It used to also hold the project's status list, back when the columns were
+ * per-project (ADR 0019). docs/plans/0003-four-static-columns.md reversed that: the
+ * four columns are the schema now, fixed in `task.ts`, and a config is not asked.
  */
 
 export interface ProjectConfig {
   prefix: string;
   nextId: number;
-  /** The project's columns, in board order. Never empty. See `STATUSES`. */
-  statuses: string[];
 }
 
 /** What a project gets when nothing has set a prefix explicitly. */
@@ -58,43 +58,28 @@ export function checkPrefix(prefix: string): void {
 }
 
 /**
- * Validates and normalises a project's status list. Each name is checked like a tag —
- * non-empty and whitespace-free — the list must be non-empty and free of duplicates,
- * and the returned order is preserved as given, since it is the board's column order.
- *
- * This is the one place the rules live, so `parseConfig`, `writeConfig` and (later) the
- * `tasks status` verbs all reject the same things the same way.
+ * A config may still carry a `statuses` key from before the four columns were fixed
+ * (ADR 0019, reversed by docs/plans/0003-four-static-columns.md). A key naming exactly
+ * the four is accepted and ignored — every config that predates this change is exactly
+ * that case, so nothing has to be rewritten on read. Anything else is a hard error:
+ * silently dropping it would strand whatever tasks sit in a column it lists that is not
+ * one of the four.
  */
-export function checkStatusList(value: unknown, where: string): string[] {
-  if (!Array.isArray(value)) {
-    throw new ConfigError(`${where}: 'statuses' must be an array of names.`);
-  }
-  if (value.length === 0) {
-    throw new ConfigError(
-      `${where}: 'statuses' cannot be empty — a project needs at least one column.`,
-    );
-  }
-  const seen = new Set<string>();
-  const statuses = value.map((status) => {
-    if (typeof status !== 'string') {
-      throw new ConfigError(`${where}: every entry in 'statuses' must be a string.`);
-    }
-    const trimmed = status.trim();
-    if (trimmed === '') {
-      throw new ConfigError(`${where}: 'statuses' cannot contain an empty name.`);
-    }
-    if (/\s/.test(trimmed)) {
-      throw new ConfigError(
-        `${where}: status '${trimmed}' contains whitespace. Use a hyphen instead.`,
-      );
-    }
-    if (seen.has(trimmed)) {
-      throw new ConfigError(`${where}: status '${trimmed}' is listed more than once.`);
-    }
-    seen.add(trimmed);
-    return trimmed;
-  });
-  return statuses;
+function checkLegacyStatuses(value: unknown, where: string): void {
+  if (value === undefined) return;
+
+  const fixed = new Set<string>(STATUSES);
+  const matches =
+    Array.isArray(value) &&
+    value.length === STATUSES.length &&
+    value.every((entry) => typeof entry === 'string' && fixed.has(entry));
+  if (matches) return;
+
+  throw new ConfigError(
+    `${where}: 'statuses' is ${JSON.stringify(value)}. The four columns are fixed now — ` +
+      `${STATUSES.join(', ')} — and this key is no longer read. Move any tasks sitting in ` +
+      `a column that is not one of the four, then delete 'statuses' from config.json.`,
+  );
 }
 
 function parseConfig(raw: unknown, where: string): ProjectConfig {
@@ -114,12 +99,9 @@ function parseConfig(raw: unknown, where: string): ProjectConfig {
     throw new ConfigError(`${where}: 'nextId' must be a positive integer.`);
   }
 
-  // A config written before statuses existed (phase 6) has no `statuses` key. It gets
-  // the defaults, so an older store keeps working without a rewrite on read.
-  const statuses =
-    'statuses' in record ? checkStatusList(record['statuses'], where) : [...STATUSES];
+  checkLegacyStatuses(record['statuses'], where);
 
-  return { prefix, nextId, statuses };
+  return { prefix, nextId };
 }
 
 /** The project's config, or `undefined` if `.tasks/config.json` does not exist yet. */
@@ -146,6 +128,5 @@ export async function readConfig(storeDir: string): Promise<ProjectConfig | unde
 
 export async function writeConfig(storeDir: string, config: ProjectConfig): Promise<void> {
   checkPrefix(config.prefix);
-  checkStatusList(config.statuses, 'config');
   await writeFileAtomically(configFilePath(storeDir), `${JSON.stringify(config, null, 2)}\n`);
 }

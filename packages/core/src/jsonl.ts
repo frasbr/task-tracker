@@ -13,6 +13,9 @@ import type { Task, TaskStatus } from './task.ts';
 import { TASK_FIELDS, TaskValidationError, parseTask } from './validate.ts';
 import type { TaskDraft, TaskFilter, TaskPatch, TaskStore } from './store.ts';
 
+/** Column order, fixed. Built once since `STATUSES` never changes at runtime. */
+const STATUS_ORDER = new Map<TaskStatus, number>(STATUSES.map((status, index) => [status, index]));
+
 /**
  * The JSONL store. One task per line, one file per project.
  *
@@ -77,7 +80,7 @@ class JsonlStore implements TaskStore {
     // a gap in the numbering (harmless) rather than two tasks sharing a number (not).
     await writeConfig(dirname(this.#file), { ...config, nextId: config.nextId + 1 });
 
-    return this.#writeAndReturn([...tasks, task], task.id, config.prefix, config.statuses);
+    return this.#writeAndReturn([...tasks, task], task.id, config.prefix);
   }
 
   async update(id: string, patch: TaskPatch): Promise<Task> {
@@ -107,7 +110,7 @@ class JsonlStore implements TaskStore {
     // (dropping the pointer itself is tt-19, not this).
     if (patch.blockedBy !== undefined) checkPrerequisites(next, id);
 
-    return this.#writeAndReturn(next, id, config.prefix, config.statuses);
+    return this.#writeAndReturn(next, id, config.prefix);
   }
 
   async move(
@@ -133,7 +136,6 @@ class JsonlStore implements TaskStore {
       tasks.map((task) => (task.id === id ? moved : task)),
       id,
       config.prefix,
-      config.statuses,
     );
   }
 
@@ -154,13 +156,11 @@ class JsonlStore implements TaskStore {
             : task,
         ),
       config.prefix,
-      config.statuses,
     );
   }
 
   async listStatuses(): Promise<string[]> {
-    const { config } = await this.#read();
-    return config.statuses;
+    return [...STATUSES];
   }
 
   #require(tasks: readonly Task[], id: string): Task {
@@ -185,7 +185,7 @@ class JsonlStore implements TaskStore {
     const tasks: Task[] = [];
     const seen = new Set<string>();
     for (const { where, parsed } of lines) {
-      const task = parseTask(parsed, where, config.prefix, config.statuses);
+      const task = parseTask(parsed, where, config.prefix);
       if (seen.has(task.id)) {
         throw new TaskValidationError(`${where}: duplicate task ID '${task.id}'.`, 'id');
       }
@@ -193,7 +193,7 @@ class JsonlStore implements TaskStore {
       tasks.push(task);
     }
 
-    return { tasks: tasks.sort(byColumnThenRank(statusOrder(config.statuses))), config };
+    return { tasks: tasks.sort(byColumnThenRank), config };
   }
 
   /**
@@ -208,11 +208,7 @@ class JsonlStore implements TaskStore {
     if (existing !== undefined) return existing;
 
     if (lines.length === 0) {
-      const fresh: ProjectConfig = {
-        prefix: DEFAULT_PREFIX,
-        nextId: 1,
-        statuses: [...STATUSES],
-      };
+      const fresh: ProjectConfig = { prefix: DEFAULT_PREFIX, nextId: 1 };
       await writeConfig(dirname(this.#file), fresh);
       return fresh;
     }
@@ -228,13 +224,8 @@ class JsonlStore implements TaskStore {
     );
   }
 
-  async #writeAndReturn(
-    tasks: readonly Task[],
-    id: string,
-    prefix: string,
-    statuses: readonly string[],
-  ): Promise<Task> {
-    const written = await writeTasks(this.#file, tasks, prefix, statuses);
+  async #writeAndReturn(tasks: readonly Task[], id: string, prefix: string): Promise<Task> {
+    const written = await writeTasks(this.#file, tasks, prefix);
     const task = written.find((candidate) => candidate.id === id);
     if (!task) {
       throw new TaskValidationError(`Task '${id}' vanished during the write.`, 'id');
@@ -257,7 +248,7 @@ export async function migrateStore(file: string, prefix: string): Promise<IdMigr
 
   const migration = migrateIds(tasks, prefix);
   await writeConfig(dirname(file), migration.config);
-  await writeTasks(file, migration.tasks, prefix, migration.config.statuses);
+  await writeTasks(file, migration.tasks, prefix);
 
   return migration;
 }
@@ -307,21 +298,10 @@ function byRank(a: Task, b: Task): number {
   return a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0;
 }
 
-/** A status → column-index lookup, built from the project's configured order. */
-function statusOrder(statuses: readonly string[]): Map<string, number> {
-  return new Map(statuses.map((status, index) => [status, index]));
-}
-
-/**
- * Sorts by column, then by rank within it. Column order is the project's configured
- * status order. A status not in that order sorts after every configured one — a
- * transient state, since the write path validates each task against the same list.
- */
-function byColumnThenRank(order: Map<string, number>): (a: Task, b: Task) => number {
-  return (a, b) => {
-    const columns = (order.get(a.status) ?? order.size) - (order.get(b.status) ?? order.size);
-    return columns !== 0 ? columns : byRank(a, b);
-  };
+/** Sorts by column, in `STATUS_ORDER`, then by rank within it. */
+function byColumnThenRank(a: Task, b: Task): number {
+  const columns = STATUS_ORDER.get(a.status)! - STATUS_ORDER.get(b.status)!;
+  return columns !== 0 ? columns : byRank(a, b);
 }
 
 function lastRankIn(tasks: readonly Task[], status: TaskStatus, excludeId: string): string | null {
@@ -379,10 +359,10 @@ function resolveNeighbours(
  * This is the renumbering trigger rank exhaustion needs. It runs on every write, which is
  * cheap because the check is a length comparison and the rebuild almost never fires.
  */
-function renumberExhaustedColumns(tasks: readonly Task[], statuses: readonly string[]): Task[] {
+function renumberExhaustedColumns(tasks: readonly Task[]): Task[] {
   const result = [...tasks];
 
-  for (const status of statuses) {
+  for (const status of STATUSES) {
     const indices = result
       .map((task, index) => ({ task, index }))
       .filter((entry) => entry.task.status === status);
@@ -417,17 +397,10 @@ function serialise(task: Task): string {
  * and only fails the *next* time the store is opened, by which point the caller that
  * wrote it is long gone.
  */
-async function writeTasks(
-  file: string,
-  tasks: readonly Task[],
-  prefix: string,
-  statuses: readonly string[],
-): Promise<Task[]> {
-  const ordered = [...tasks].sort(byColumnThenRank(statusOrder(statuses)));
-  const settled = renumberExhaustedColumns(ordered, statuses);
-  const validated = settled.map((task, index) =>
-    parseTask(task, `${file}:${index + 1}`, prefix, statuses),
-  );
+async function writeTasks(file: string, tasks: readonly Task[], prefix: string): Promise<Task[]> {
+  const ordered = [...tasks].sort(byColumnThenRank);
+  const settled = renumberExhaustedColumns(ordered);
+  const validated = settled.map((task, index) => parseTask(task, `${file}:${index + 1}`, prefix));
   const body = validated.map(serialise).join('\n');
   await writeFileAtomically(file, validated.length > 0 ? `${body}\n` : '');
   return validated;

@@ -1,6 +1,5 @@
 import type { TaskPatch } from './store.ts';
 import type { Task } from './task.ts';
-import { STATUSES } from './task.ts';
 import { TaskValidationError, parsePatch } from './validate.ts';
 
 /**
@@ -91,11 +90,7 @@ function list(key: string, values: readonly string[]): string {
  * Leading and trailing blank lines around the notes are not significant — the document
  * is the task as text, not a byte-exact mirror of the store.
  */
-export function parseTaskDocument(
-  text: string,
-  statuses: readonly string[] = STATUSES,
-  where = 'task document',
-): TaskDocument {
+export function parseTaskDocument(text: string, where = 'task document'): TaskDocument {
   const lines = text.split('\n');
 
   const opening = lines.findIndex((line) => line.trim() !== '');
@@ -120,7 +115,7 @@ export function parseTaskDocument(
     .replace(/^\s*\n/, '')
     .trimEnd();
 
-  return { id, patch: parsePatch(record, statuses, where) };
+  return { id, patch: parsePatch(record, where) };
 }
 
 function readHeader(lines: readonly string[], where: string): Record<string, unknown> {

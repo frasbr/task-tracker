@@ -167,7 +167,6 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: sanitizePrefix(basename(project)),
       nextId: 1,
-      statuses: [...STATUSES],
     });
   });
 
@@ -176,7 +175,6 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: 'tt',
       nextId: 1,
-      statuses: [...STATUSES],
     });
   });
 
@@ -185,7 +183,6 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: 'tt',
       nextId: 1,
-      statuses: [...STATUSES],
     });
   });
 
@@ -194,7 +191,6 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: 'my-cool-repo',
       nextId: 1,
-      statuses: [...STATUSES],
     });
   });
 
@@ -211,7 +207,6 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: 'tt',
       nextId: 1,
-      statuses: [...STATUSES],
     });
   });
 });

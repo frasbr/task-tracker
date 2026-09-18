@@ -31,7 +31,6 @@ export {
   ConfigError,
   DEFAULT_PREFIX,
   checkPrefix,
-  checkStatusList,
   readConfig,
   sanitizePrefix,
   writeConfig,
