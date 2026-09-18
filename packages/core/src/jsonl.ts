@@ -8,7 +8,7 @@ import type { IdMigration } from './migrate.ts';
 import { migrateIds } from './migrate.ts';
 import { checkPrerequisites } from './prerequisites.ts';
 import { needsRenumber, rankBetween, renumberRanks } from './rank.ts';
-import { DEFAULT_STATUSES } from './task.ts';
+import { STATUSES } from './task.ts';
 import type { Task, TaskStatus } from './task.ts';
 import { TASK_FIELDS, TaskValidationError, parseTask } from './validate.ts';
 import type { TaskDraft, TaskFilter, TaskPatch, TaskStore } from './store.ts';
@@ -211,7 +211,7 @@ class JsonlStore implements TaskStore {
       const fresh: ProjectConfig = {
         prefix: DEFAULT_PREFIX,
         nextId: 1,
-        statuses: [...DEFAULT_STATUSES],
+        statuses: [...STATUSES],
       };
       await writeConfig(dirname(this.#file), fresh);
       return fresh;

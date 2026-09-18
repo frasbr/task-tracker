@@ -4,7 +4,7 @@ import { basename, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import {
   DEFAULT_PREFIX,
-  DEFAULT_STATUSES,
+  STATUSES,
   STORE_DIR_NAME,
   TaskValidationError,
   checkPrefix,
@@ -193,7 +193,7 @@ async function init(args: ParsedArgs, io: Io, directory: string): Promise<number
   const explicitPrefix = flagValue(args, 'prefix');
   const prefix =
     explicitPrefix !== undefined ? checkedPrefix(explicitPrefix) : await defaultPrefix(directory);
-  await writeConfig(storeDir, { prefix, nextId: 1, statuses: [...DEFAULT_STATUSES] });
+  await writeConfig(storeDir, { prefix, nextId: 1, statuses: [...STATUSES] });
   io.out(
     explicitPrefix === undefined
       ? `Using task ID prefix '${prefix}', from the project directory. Override with --prefix.`
@@ -697,11 +697,11 @@ async function exists(path: string): Promise<boolean> {
 
 /** The project's configured statuses, or the defaults for a store with no config yet. */
 function statusesOf(config: ProjectConfig | undefined): string[] {
-  return config?.statuses ?? [...DEFAULT_STATUSES];
+  return config?.statuses ?? [...STATUSES];
 }
 
 function asStatus(value: string, statuses: readonly string[]): TaskStatus {
-  if (!isTaskStatus(value, statuses)) {
+  if (!isTaskStatus(value)) {
     throw new UsageError(`'${value}' is not a status. Use one of: ${statuses.join(', ')}.`);
   }
   return value;

@@ -11,7 +11,7 @@ import {
   sanitizePrefix,
   writeConfig,
 } from './config.ts';
-import { DEFAULT_STATUSES } from './task.ts';
+import { STATUSES } from './task.ts';
 
 describe('sanitizePrefix', () => {
   it('lowercases', () => {
@@ -76,7 +76,7 @@ describe('readConfig / writeConfig', () => {
 
   it('refuses to write a prefix with a digit-only segment', async () => {
     await assert.rejects(
-      writeConfig(dir, { prefix: 'foo-2', nextId: 1, statuses: [...DEFAULT_STATUSES] }),
+      writeConfig(dir, { prefix: 'foo-2', nextId: 1, statuses: [...STATUSES] }),
       ConfigError,
     );
   });
@@ -86,7 +86,7 @@ describe('readConfig / writeConfig', () => {
     assert.deepEqual(await readConfig(dir), {
       prefix: 'demo',
       nextId: 1,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 
@@ -123,12 +123,12 @@ describe('readConfig / writeConfig', () => {
   });
 
   it('leaves no temporary files behind', async () => {
-    await writeConfig(dir, { prefix: 'demo', nextId: 1, statuses: [...DEFAULT_STATUSES] });
+    await writeConfig(dir, { prefix: 'demo', nextId: 1, statuses: [...STATUSES] });
     const contents = await readFile(join(dir, 'config.json'), 'utf8');
     assert.deepEqual(JSON.parse(contents), {
       prefix: 'demo',
       nextId: 1,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 });

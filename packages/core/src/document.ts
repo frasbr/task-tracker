@@ -1,6 +1,6 @@
 import type { TaskPatch } from './store.ts';
 import type { Task } from './task.ts';
-import { DEFAULT_STATUSES } from './task.ts';
+import { STATUSES } from './task.ts';
 import { TaskValidationError, parsePatch } from './validate.ts';
 
 /**
@@ -93,7 +93,7 @@ function list(key: string, values: readonly string[]): string {
  */
 export function parseTaskDocument(
   text: string,
-  statuses: readonly string[] = DEFAULT_STATUSES,
+  statuses: readonly string[] = STATUSES,
   where = 'task document',
 ): TaskDocument {
   const lines = text.split('\n');

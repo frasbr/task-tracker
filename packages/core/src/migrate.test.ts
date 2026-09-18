@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { migrateIds } from './migrate.ts';
-import { DEFAULT_STATUSES } from './task.ts';
+import { STATUSES } from './task.ts';
 import type { Task } from './task.ts';
 
 function task(overrides: Partial<Task> & Pick<Task, 'id' | 'created'>): Task {
@@ -35,7 +35,7 @@ describe('migrateIds', () => {
     assert.deepEqual(migration.config, {
       prefix: 'demo',
       nextId: 3,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 

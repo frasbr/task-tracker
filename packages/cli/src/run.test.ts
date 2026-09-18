@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import type { Task } from '@task-tracker/core';
-import { DEFAULT_STATUSES, readConfig, sanitizePrefix } from '@task-tracker/core';
+import { STATUSES, readConfig, sanitizePrefix } from '@task-tracker/core';
 import { EXIT_FAILED, EXIT_OK, EXIT_USAGE, run } from './run.ts';
 
 let project: string;
@@ -167,7 +167,7 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: sanitizePrefix(basename(project)),
       nextId: 1,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 
@@ -176,7 +176,7 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: 'tt',
       nextId: 1,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 
@@ -185,7 +185,7 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: 'tt',
       nextId: 1,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 
@@ -194,7 +194,7 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: 'my-cool-repo',
       nextId: 1,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 
@@ -211,7 +211,7 @@ describe('init', () => {
     assert.deepEqual(await readConfig(join(project, '.tasks')), {
       prefix: 'tt',
       nextId: 1,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 });
@@ -785,10 +785,10 @@ describe('the shell contract', () => {
 describe('status', () => {
   it('lists the four statuses, and as JSON', async () => {
     await ok('init');
-    assert.equal((await ok('status', 'list')).out, DEFAULT_STATUSES.join('\n'));
-    assert.deepEqual(await json<string[]>('status', 'list'), [...DEFAULT_STATUSES]);
+    assert.equal((await ok('status', 'list')).out, STATUSES.join('\n'));
+    assert.deepEqual(await json<string[]>('status', 'list'), [...STATUSES]);
     // Bare `tasks status` behaves as `status list`.
-    assert.equal((await ok('status')).out, DEFAULT_STATUSES.join('\n'));
+    assert.equal((await ok('status')).out, STATUSES.join('\n'));
   });
 
   it('rejects each removed subcommand by name, not as a typo', async () => {
@@ -807,7 +807,7 @@ describe('status', () => {
     await ok('init');
     await tasks('status', 'add', 'review', '--after=in-progress');
     await tasks('status', 'rename', 'priority', 'next-up');
-    assert.deepEqual(await json<string[]>('status', 'list'), [...DEFAULT_STATUSES]);
+    assert.deepEqual(await json<string[]>('status', 'list'), [...STATUSES]);
   });
 
   it('still refuses a status the project does not have', async () => {

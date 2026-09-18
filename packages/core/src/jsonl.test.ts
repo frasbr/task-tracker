@@ -7,7 +7,7 @@ import { readConfig, writeConfig } from './config.ts';
 import { formatId } from './ids.ts';
 import { createJsonlStore, migrateStore } from './jsonl.ts';
 import { RANK_LENGTH_LIMIT, isRank } from './rank.ts';
-import { DEFAULT_STATUSES } from './task.ts';
+import { STATUSES } from './task.ts';
 import type { Task } from './task.ts';
 import { TaskValidationError } from './validate.ts';
 import type { TaskStore } from './store.ts';
@@ -468,18 +468,18 @@ describe('project config', () => {
     assert.deepEqual(await readConfig(dir), {
       prefix: 'task',
       nextId: 2,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 
   it('mints ids from a prefix set before any task existed', async () => {
-    await writeConfig(dir, { prefix: 'demo', nextId: 5, statuses: [...DEFAULT_STATUSES] });
+    await writeConfig(dir, { prefix: 'demo', nextId: 5, statuses: [...STATUSES] });
     const task = await store.create(draft('First'));
     assert.equal(task.id, 'demo-5');
     assert.deepEqual(await readConfig(dir), {
       prefix: 'demo',
       nextId: 6,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 
@@ -503,37 +503,21 @@ describe('project config', () => {
   });
 
   it("rejects a task carrying a different project's prefix", async () => {
-    await writeConfig(dir, { prefix: 'demo', nextId: 1, statuses: [...DEFAULT_STATUSES] });
+    await writeConfig(dir, { prefix: 'demo', nextId: 1, statuses: [...STATUSES] });
     const task = await store.create(draft('X'));
     await writeFile(file, `${JSON.stringify({ ...task, id: 'other-3' })}\n`);
 
     await assert.rejects(store.list(), /not a valid task ID/);
   });
 
-  it('validates and orders tasks against a config with custom statuses', async () => {
-    await writeConfig(dir, {
-      prefix: 'task',
-      nextId: 1,
-      statuses: ['triage', 'review', 'shipped'],
-    });
-
-    const shipped = await store.create(draft('Ship it', { status: 'shipped' }));
-    const triaged = await store.create(draft('Look at it', { status: 'triage' }));
-
-    // Column order follows the config, not the four defaults.
-    const ids = (await store.list()).map((t) => t.id);
-    assert.deepEqual(ids, [triaged.id, shipped.id]);
-  });
-
-  it('names the configured statuses when a task carries an unknown one', async () => {
+  it('rejects a status outside the four fixed columns, even one a hand-edited config lists', async () => {
     await writeConfig(dir, { prefix: 'task', nextId: 1, statuses: ['triage', 'shipped'] });
-    const task = await store.create(draft('X', { status: 'triage' }));
-    await writeFile(file, `${JSON.stringify({ ...task, status: 'backlog' })}\n`);
+    const task = await store.create(draft('X', { status: 'backlog' }));
+    await writeFile(file, `${JSON.stringify({ ...task, status: 'triage' })}\n`);
 
     await assert.rejects(store.list(), (error: unknown) => {
       assert.ok(error instanceof TaskValidationError);
-      assert.match(error.message, /'backlog' is not a status/);
-      assert.match(error.message, /triage, shipped/);
+      assert.match(error.message, /'triage' is not a status/);
       return true;
     });
   });
@@ -542,7 +526,7 @@ describe('project config', () => {
 describe('status management', () => {
   it('lists the configured statuses', async () => {
     await store.create(draft('X'));
-    assert.deepEqual(await store.listStatuses(), [...DEFAULT_STATUSES]);
+    assert.deepEqual(await store.listStatuses(), [...STATUSES]);
   });
 });
 
@@ -575,7 +559,7 @@ describe('migrateStore', () => {
     assert.deepEqual(migration.config, {
       prefix: 'demo',
       nextId: 3,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
     assert.deepEqual(Object.fromEntries(migration.mapping), {
       t1ep9qf7v: 'demo-1',
@@ -593,7 +577,7 @@ describe('migrateStore', () => {
     assert.deepEqual(await readConfig(dir), {
       prefix: 'demo',
       nextId: 3,
-      statuses: [...DEFAULT_STATUSES],
+      statuses: [...STATUSES],
     });
   });
 

@@ -6,21 +6,20 @@
  */
 
 /**
- * The status list a project gets before its config sets one. Order here is the
- * left-to-right order on the board and top-to-bottom in the sidebar.
- *
- * These four are a default, not a schema: `.tasks/config.json` holds the project's own
- * ordered list, and validation checks a status against that list, not against this one.
- * A store with no config file behaves as if this were its list. See `config.ts`.
+ * The four columns, fixed. Order here is the left-to-right order on the board and
+ * top-to-bottom in the sidebar. See docs/plans/0003-four-static-columns.md, which
+ * reverses ADR 0019's per-project configurability.
  */
-export const DEFAULT_STATUSES = ['backlog', 'priority', 'in-progress', 'done'] as const;
+export const STATUSES = ['backlog', 'priority', 'in-progress', 'done'] as const;
 
 /**
- * A column name. Per-project, so this is a plain `string` rather than a union — the set
- * of valid names lives in the config and is passed to validation, not fixed at compile
- * time. Use `isTaskStatus(value, statuses)` to check one against a known list.
+ * A column name. Fixed at compile time, off `STATUSES`. Use `isTaskStatus(value)` to
+ * check an unknown value against it.
  */
-export type TaskStatus = string;
+export type TaskStatus = (typeof STATUSES)[number];
+
+/** The only status code branches on. A prerequisite in this column reads as finished. */
+export const DONE: TaskStatus = 'done';
 
 /** A pointer into real code, e.g. `src/auth.ts` or `src/auth.ts:42-58`. */
 export type TaskRef = string;
@@ -55,10 +54,7 @@ export interface Task {
   blockedBy: string[];
 }
 
-/** True when `value` is one of `statuses`. Defaults to the four names a fresh project has. */
-export function isTaskStatus(
-  value: unknown,
-  statuses: readonly string[] = DEFAULT_STATUSES,
-): value is TaskStatus {
-  return typeof value === 'string' && statuses.includes(value);
+/** True when `value` is one of the four statuses. */
+export function isTaskStatus(value: unknown): value is TaskStatus {
+  return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);
 }

@@ -1,4 +1,4 @@
-export { DEFAULT_STATUSES, isTaskStatus } from './task.ts';
+export { DONE, STATUSES, isTaskStatus } from './task.ts';
 export type { Task, TaskStatus, TaskRef } from './task.ts';
 
 export type { TaskStore, TaskFilter, TaskDraft, TaskPatch } from './store.ts';

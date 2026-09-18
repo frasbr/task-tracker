@@ -1,21 +1,22 @@
 import { readFile } from 'node:fs/promises';
 import { configFilePath } from './locate.ts';
 import { writeFileAtomically } from './atomic.ts';
-import { DEFAULT_STATUSES } from './task.ts';
+import { STATUSES } from './task.ts';
 
 /**
  * The project's own config: `.tasks/config.json`, beside the store it configures.
  *
  * It holds the ID prefix and the counter that mints the next number (the counter is
  * monotonic and never derived from the tasks present, so a number retired by deleting a
- * task never comes back pointing at something else), plus the project's ordered status list — the columns of the board, validated
- * against here rather than against a compile-time enum.
+ * task never comes back pointing at something else), plus a status list. `status` is now
+ * validated against the fixed four in `task.ts`, not against this list — see
+ * docs/plans/0003-four-static-columns.md, which is in the middle of removing this field.
  */
 
 export interface ProjectConfig {
   prefix: string;
   nextId: number;
-  /** The project's columns, in board order. Never empty. See `DEFAULT_STATUSES`. */
+  /** The project's columns, in board order. Never empty. See `STATUSES`. */
   statuses: string[];
 }
 
@@ -116,7 +117,7 @@ function parseConfig(raw: unknown, where: string): ProjectConfig {
   // A config written before statuses existed (phase 6) has no `statuses` key. It gets
   // the defaults, so an older store keeps working without a rewrite on read.
   const statuses =
-    'statuses' in record ? checkStatusList(record['statuses'], where) : [...DEFAULT_STATUSES];
+    'statuses' in record ? checkStatusList(record['statuses'], where) : [...STATUSES];
 
   return { prefix, nextId, statuses };
 }
