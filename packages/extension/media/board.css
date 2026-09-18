@@ -224,6 +224,10 @@ body {
   opacity: 0.5;
 }
 
+.card.blocked {
+  border-left-color: var(--vscode-errorForeground);
+}
+
 .card-title-row {
   display: flex;
   align-items: flex-start;
@@ -346,6 +350,16 @@ body {
 .card-has-notes::before {
   content: '·';
   margin-right: 8px;
+}
+
+.card-blocked {
+  color: var(--vscode-errorForeground);
+}
+
+.card-blocked::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--vscode-descriptionForeground);
 }
 
 /* ---------------------------------------------------------------- placeholders */

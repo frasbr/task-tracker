@@ -1,7 +1,7 @@
 import { describeProblem } from '../interpret.ts';
 import { columnLabel, idNumber } from '../protocol.ts';
 import type { BoardProblem, BoardStatus, BoardTask, FromWebview, ToWebview } from '../protocol.ts';
-import { filterTasks, sortColumn } from './board-view.ts';
+import { doneIds, filterTasks, isBlocked, sortColumn } from './board-view.ts';
 import type { SortKey } from './board-view.ts';
 import { dropPosition } from './drop-position.ts';
 
@@ -111,6 +111,8 @@ function renderLoading(): void {
 function renderBoard(tasks: BoardTask[], statuses: BoardStatus[], project: string): void {
   latest = { tasks, statuses, project };
 
+  const done = doneIds(tasks);
+
   const shown = filterTasks(tasks, { category: filterCategory, tag: filterTag });
   const columns = element('div', 'board');
   for (const status of statuses) {
@@ -121,6 +123,7 @@ function renderBoard(tasks: BoardTask[], statuses: BoardStatus[], project: strin
           shown.filter((task) => task.status === status),
           sortKey,
         ),
+        done,
       ),
     );
   }
@@ -228,7 +231,11 @@ function distinct(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
-function renderColumn(status: BoardStatus, tasks: BoardTask[]): HTMLElement {
+function renderColumn(
+  status: BoardStatus,
+  tasks: BoardTask[],
+  done: ReadonlySet<string>,
+): HTMLElement {
   const column = element('section', `column column-${status}`);
 
   const label = columnLabel(status);
@@ -253,14 +260,14 @@ function renderColumn(status: BoardStatus, tasks: BoardTask[]): HTMLElement {
   if (tasks.length === 0) {
     cards.append(element('p', 'column-empty', 'Nothing here'));
   } else {
-    for (const task of tasks) cards.append(renderCard(task));
+    for (const task of tasks) cards.append(renderCard(task, done));
   }
 
   column.append(cards);
   return column;
 }
 
-function renderCard(task: BoardTask): HTMLElement {
+function renderCard(task: BoardTask, done: ReadonlySet<string>): HTMLElement {
   const card = element('article', 'card');
   card.dataset.id = task.id;
   // Drag reorders within the manual `rank` order; under any other sort a drop position
@@ -269,6 +276,10 @@ function renderCard(task: BoardTask): HTMLElement {
   card.tabIndex = 0;
   card.setAttribute('role', 'button');
   card.title = `Open ${task.title}`;
+
+  // Only this card renders differently — the upstream prerequisite card is unchanged.
+  const blocked = isBlocked(task, done);
+  if (blocked) card.classList.add('blocked');
 
   card.addEventListener('dragstart', (event) => {
     dragState = { id: task.id };
@@ -303,6 +314,7 @@ function renderCard(task: BoardTask): HTMLElement {
   if (task.refs.length > 0) card.append(renderRefs(task.refs));
 
   const footer = element('div', 'card-footer', [element('span', 'card-id', idNumber(task.id))]);
+  if (blocked) footer.append(element('span', 'card-blocked', 'blocked'));
   if (task.notes.trim() !== '') footer.append(element('span', 'card-has-notes', 'notes'));
   card.append(footer);
 

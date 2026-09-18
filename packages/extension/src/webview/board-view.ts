@@ -47,3 +47,17 @@ export function sortColumn(tasks: readonly BoardTask[], sort: SortKey): BoardTas
 function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
+
+/** The ids of every task whose status is `done`, for `isBlocked` to check prerequisites against. */
+export function doneIds(tasks: readonly BoardTask[]): ReadonlySet<string> {
+  return new Set(tasks.filter((task) => task.status === 'done').map((task) => task.id));
+}
+
+/**
+ * A task reads as blocked when at least one of its prerequisites is not done — checked
+ * against the whole task list's `doneIds`, not the filtered or column-local view, since a
+ * prerequisite sitting in a hidden column still counts.
+ */
+export function isBlocked(task: BoardTask, done: ReadonlySet<string>): boolean {
+  return task.blockedBy.some((id) => !done.has(id));
+}

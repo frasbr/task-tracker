@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { BoardTask } from '../protocol.ts';
-import { filterTasks, sortColumn } from './board-view.ts';
+import { doneIds, filterTasks, isBlocked, sortColumn } from './board-view.ts';
 
 function task(overrides: Partial<BoardTask>): BoardTask {
   return {
@@ -15,6 +15,7 @@ function task(overrides: Partial<BoardTask>): BoardTask {
     created: '2026-08-01T00:00:00.000Z',
     updated: '2026-08-01T00:00:00.000Z',
     refs: [],
+    blockedBy: [],
     ...overrides,
   };
 }
@@ -104,5 +105,40 @@ describe('sortColumn', () => {
       input.map((t) => t.id),
       ['c', 'a', 'b'],
     );
+  });
+});
+
+describe('doneIds / isBlocked', () => {
+  it('collects the ids of tasks whose status is done', () => {
+    const tasks = [
+      task({ id: 'a', status: 'done' }),
+      task({ id: 'b', status: 'in-progress' }),
+      task({ id: 'c', status: 'done' }),
+    ];
+    assert.deepEqual([...doneIds(tasks)].sort(), ['a', 'c']);
+  });
+
+  it('is not blocked with no prerequisites', () => {
+    assert.equal(isBlocked(task({ blockedBy: [] }), doneIds([])), false);
+  });
+
+  it('is not blocked when every prerequisite is done', () => {
+    const done = doneIds([task({ id: 'p1', status: 'done' }), task({ id: 'p2', status: 'done' })]);
+    assert.equal(isBlocked(task({ blockedBy: ['p1', 'p2'] }), done), false);
+  });
+
+  it('is blocked when at least one prerequisite is not done', () => {
+    const done = doneIds([
+      task({ id: 'p1', status: 'done' }),
+      task({ id: 'p2', status: 'in-progress' }),
+    ]);
+    assert.equal(isBlocked(task({ blockedBy: ['p1', 'p2'] }), done), true);
+  });
+
+  it('reads a prerequisite outside the current column set as blocked, if it is not done', () => {
+    // doneIds is built from the whole task list, not the filtered/column-local view, so
+    // a prerequisite that got filtered out of `done`'s source list still counts.
+    const done = doneIds([task({ id: 'p1', status: 'backlog' })]);
+    assert.equal(isBlocked(task({ blockedBy: ['p1'] }), done), true);
   });
 });

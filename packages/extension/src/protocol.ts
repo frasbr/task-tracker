@@ -11,9 +11,10 @@
  */
 
 /**
- * A column name. Per-project now: the extension no longer
- * knows the set at compile time — it arrives with each `tasks` message, read from
- * `tasks status list --json`. So this is a plain string, not a union of four literals.
+ * A column name. Core fixed the set to four (ADR 0023), but this package does not import
+ * that union — boundary 2 keeps it off `@task-tracker/core` — so it stays a plain string,
+ * arriving at runtime with each `tasks` message from `tasks status list --json` rather
+ * than known at compile time.
  */
 export type BoardStatus = string;
 
@@ -40,6 +41,7 @@ export interface BoardTask {
   created: string;
   updated: string;
   refs: string[];
+  blockedBy: string[];
 }
 
 /**
