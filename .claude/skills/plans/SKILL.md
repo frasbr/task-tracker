@@ -16,29 +16,21 @@ covers the seam between the two; this skill covers the writing.
 Write one when any of these is true:
 
 - The work spans more than one session.
-- It cuts into more than about four tasks.
+- It cuts into more than about three tasks.
 - Someone could reasonably disagree with the approach.
 - The reason for the order of the steps is not obvious from the steps.
 
-Otherwise write the tasks and start. A plan for work that did not need one is a file nobody
-reads, and it costs every later reader the time it takes to decide it does not matter.
-
-Unsure? Write the Problem section and stop. If it comes out as one obvious sentence, there is no
-plan to write. Put the sentence in the task's notes and get on with it.
+If you are unsure, or believe that a plan is not needed, ask the human whether or not to continue while stating your reasoning. If the human says yes, write the plan. If the human says no, suggest an alternative next action.
 
 ## Evidence before prose
 
-Problem is the load-bearing section. It must hold things a reader can check:
+The problem section contains the substance of what the proposed change is and why it should happen. Each statement should be open to scrutiny. Therefore, it must be backed by verifiable evidence:
 
 - File paths, with line ranges where they help.
 - The actual error text, command output, or measurement. Not a paraphrase of it.
-- What happens today, stated as behaviour rather than as a feeling about the code.
+- The existing behaviour of the system, as related to the problem outlined.
 
-A Problem section with no checkable facts is a wish. Nobody can argue with it, so review of the
-plan collapses into agreeing with its tone.
-
-Read the code before writing this section. If you cannot cite a path, you have not read enough
-of it yet.
+Read the code before writing this section. If you cannot cite a path, you have not read enough of it yet.
 
 ## How deep the spec goes
 
@@ -50,8 +42,7 @@ Two checks on it:
 - **Too deep** if it names function signatures, types, or private structure. That is
   implementation, and it will be wrong by the time the work lands.
 
-Write the error cases down. They are where specs go quiet, and where what gets built diverges
-from what was wanted.
+Write the error cases down.
 
 ## Cutting tasks is part of writing the plan
 
@@ -68,29 +59,38 @@ about the exit code, which must be 2 and not 1. Name the unknown status and list
 valid ones in the message."
 ```
 
-Every task from the plan carries the plan's path in its refs, and every one carries notes.
+Every task should reference the plan. Every plan should have notes that allow whoever picks it up to understand exactly what work needs to be done
 
-The plan being in refs is not a reason to leave the notes empty. It is the reason they are
-short. A plan is long and the task needs one part of it: which paragraph applies here, what
-you found in the code while cutting this task, and the trap the next person would otherwise
-walk into. Write that down while you still have it — you have just read the code, and that
-context is gone by the time anyone picks the task up.
+Do not just restate the plan in the notes. The notes are the context needed for the task. If applicable, provide specific paragraphs or line numbers to the references so that any agent can gather only the relevant information needed for the task. In addition, the notes should contain any possible traps or pitfalls that the next person might encounter when working on the task. The goal is to ensure that the task can be completed without needing to re-read the entire plan.
 
-A task whose notes only restate its title is not cut yet.
+If nobody could write failing tests from the information in the notes, it is too vague.
 
-Say what will be observably different when the task is done, in a sentence, in the notes. The
-same bar the Spec section is held to applies here: if nobody could write a failing test from
-what you wrote, it is too vague. Do not add an acceptance-criteria heading — the sentence
-belongs in the notes, and a heading only invites restating the title under it. AGENTS.md holds
-the definition of done, which is about whether a change is fit to land and is the same for every
-task. This is the other question: whether it was the right thing to build.
+Do not add an acceptance-criteria heading. Include a brief outline of what should have changed after the task is complete. The definition of done (DOD) does not belong in a singular task, it should be found in the AGENTS.md file. If the DOD is not found, prompt the human to add it.
 
-The cut is a test of the Approach section. A task you cannot state in one imperative line without
-re-reading the plan means the section is too vague. Fix the plan rather than writing the vague
-task.
+Never copy the task list back into the plan.
 
-Never copy the task list back into the plan. Two copies of a checklist means one of them is lying
-inside a day.
+## Writing style
+
+Technical sections — Problem, Spec, Not in scope, Approach, and task notes — are read by someone
+deciding what to do next. Write so that two readers cannot come away with different work.
+
+- **One claim per sentence.** Split any sentence joining two facts with "and" or a semicolon.
+- **Name the thing.** Use the path, command, flag, status, or error text. Never "the validator",
+  "the config", or "the relevant file".
+- **Say what the system does, not what it should.** Present tense, active voice, a named actor:
+  "`tasks add` exits 2 on an unknown status", not "an error should be returned".
+- **Quantify.** Give the number, the limit, the exit code, the duration. Cut "some", "several",
+  "a few", "most", "quickly", "large", "recently".
+- **Ban soft modals in the spec.** No "should", "may", "could", "ideally", "probably". A behaviour
+  is either required or it is not in the spec. Keep "must" only where a reader might assume
+  otherwise; otherwise state the behaviour plainly.
+- Every pronoun ("it", "this", "they") must have exactly one possible referent in the preceding
+  sentence. If it does not, repeat the noun.
+- Define a term once, then use that exact term everywhere. No synonyms for variety — a renamed
+  concept reads as a second concept.
+- Cut hedges ("essentially", "basically", "note that"), cut restatement of what the previous
+sentence said, and cut any sentence describing the plan itself rather than the work. If a
+paragraph survives deletion without the reader losing a fact, delete it.
 
 ## What leaves the plan, and where it goes
 
@@ -132,3 +132,4 @@ plan; the reasoning behind a wrong turn is often the most useful thing in the di
    refs and enough notes to start on without re-reading the plan.
 4. A hard-to-reverse decision graduates to an ADR. Link it from the plan rather than restating it.
 5. Delete any section you have nothing to say in. A short true plan beats a padded complete one.
+6. Technical sections should adhere to the guidelines stated in the "Writing style" section.
