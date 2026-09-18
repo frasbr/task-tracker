@@ -1,3 +1,6 @@
+> Superseded by [ADR 0023](0023-the-four-columns-are-fixed.md). The columns are fixed now; the
+> reasoning below is kept for the record.
+
 # Statuses are the project's own, held in config
 
 A project's columns live in `.tasks/config.json` as an ordered list, and validation checks a

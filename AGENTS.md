@@ -188,12 +188,15 @@ data-model decisions that have no boundary to enforce them.
 - [0010](docs/adr/0010-task-documents-are-not-yaml.md) the task document format
 - [0011](docs/adr/0011-filter-and-sort-are-view-state.md) filter and sort as view state
 - [0018](docs/adr/0018-plans-live-in-a-numbered-directory.md) plans as numbered documents
-- [0019](docs/adr/0019-statuses-are-per-project.md) statuses as project config
+- [0019](docs/adr/0019-statuses-are-per-project.md) statuses as project config — superseded by
+  0023
 - [0020](docs/adr/0020-blocked-by-is-a-separate-field.md) `blockedBy` as its own field
 - [0021](docs/adr/0021-whole-store-rules-live-in-core.md) whole-store rules as their own core
   module
 - [0022](docs/adr/0022-mechanical-rewrites-stay-with-their-write.md) mechanical rewrites stay
   with their write
+- [0023](docs/adr/0023-the-four-columns-are-fixed.md) the four columns are fixed, superseding
+  0019
 
 Start at [0001](docs/adr/0001-tasks-are-local-working-memory.md). Tasks are one person's local
 working memory, and every other decision assumes it.
@@ -247,10 +250,12 @@ unplanned work. Building one is a decision, not a tidy-up.
   reads per list, and a migration. Revisit if tasks need editing outside VSCode, or in git.
 - **Subtasks and checklists** — real schema and UI cost. Revisit once the flat model visibly
   fails.
-- **A status that means "finished"** — marking one column terminal so reports can say what closed
-  this week. Not built, because the moment one name is special, renaming it breaks things
-  quietly ([ADR 0019](docs/adr/0019-statuses-are-per-project.md)). If a feature needs it, add an
-  explicit flag on a status rather than blessing a name.
+- **A status that means "finished"** — this entry used to advise adding an explicit flag on a
+  status rather than blessing a name, since renaming a special column would break things
+  quietly ([ADR 0019](docs/adr/0019-statuses-are-per-project.md)). **That advice is void.**
+  [ADR 0023](docs/adr/0023-the-four-columns-are-fixed.md) fixed the four columns, which removed
+  the rename risk rather than working around it: `done` is now built as terminal, and a task
+  reads as blocked when a prerequisite's status is not `done`.
 - **Conflict resolution** — detecting that a task changed on disk under an open edit.
   Last-write-wins ships; add the banner if text is actually lost.
 - **Configurable category colours** — the hash-to-palette assignment is stable and free. A picker
