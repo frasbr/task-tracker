@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { writeFileAtomically } from './atomic.ts';
-import { ConfigError, DEFAULT_PREFIX, checkStatusList, readConfig, writeConfig } from './config.ts';
+import { DEFAULT_PREFIX, readConfig, writeConfig } from './config.ts';
 import type { ProjectConfig } from './config.ts';
 import { formatId, isLegacyId } from './ids.ts';
 import type { IdMigration } from './migrate.ts';
@@ -11,7 +11,7 @@ import { needsRenumber, rankBetween, renumberRanks } from './rank.ts';
 import { DEFAULT_STATUSES } from './task.ts';
 import type { Task, TaskStatus } from './task.ts';
 import { TASK_FIELDS, TaskValidationError, parseTask } from './validate.ts';
-import type { StatusPosition, TaskDraft, TaskFilter, TaskPatch, TaskStore } from './store.ts';
+import type { TaskDraft, TaskFilter, TaskPatch, TaskStore } from './store.ts';
 
 /**
  * The JSONL store. One task per line, one file per project.
@@ -144,11 +144,10 @@ class JsonlStore implements TaskStore {
       this.#file,
       tasks
         .filter((task) => task.id !== id)
-        // Same shape as renameStatus below: every task carrying a pointer to what is
-        // about to disappear is rewritten in this write, so none is left naming a task
-        // that no longer exists. `updated` is left alone for the same reason
-        // renameStatus leaves it alone below — the edit belongs to whoever deleted the
-        // prerequisite, not to a task that did not ask to change.
+        // Every task carrying a pointer to what is about to disappear is rewritten in
+        // this write, so none is left naming a task that no longer exists. `updated` is
+        // left alone — the edit belongs to whoever deleted the prerequisite, not to a
+        // task that did not ask to change.
         .map((task) =>
           task.blockedBy.includes(id)
             ? { ...task, blockedBy: task.blockedBy.filter((blocked) => blocked !== id) }
@@ -162,100 +161,6 @@ class JsonlStore implements TaskStore {
   async listStatuses(): Promise<string[]> {
     const { config } = await this.#read();
     return config.statuses;
-  }
-
-  async addStatus(name: string, position?: StatusPosition): Promise<string[]> {
-    const { config } = await this.#read();
-    if (config.statuses.includes(name.trim())) {
-      throw new ConfigError(`A status named '${name.trim()}' already exists.`);
-    }
-    const statuses = checkStatusList(placeInList(config.statuses, name.trim(), position), 'config');
-    await writeConfig(dirname(this.#file), { ...config, statuses });
-    return statuses;
-  }
-
-  async renameStatus(from: string, to: string): Promise<string[]> {
-    const { tasks, config } = await this.#read();
-    requireStatus(config.statuses, from);
-
-    const statuses = checkStatusList(
-      config.statuses.map((status) => (status === from ? to.trim() : status)),
-      'config',
-    );
-
-    // Config first, then the tasks it now describes — the same crash-ordering `create`
-    // uses. A card is never left naming a column the config no longer lists.
-    await writeConfig(dirname(this.#file), { ...config, statuses });
-    await writeTasks(
-      this.#file,
-      tasks.map((task) => (task.status === from ? { ...task, status: to.trim() } : task)),
-      config.prefix,
-      statuses,
-    );
-    return statuses;
-  }
-
-  async reorderStatus(name: string, position?: StatusPosition): Promise<string[]> {
-    const { config } = await this.#read();
-    requireStatus(config.statuses, name);
-    const statuses = checkStatusList(placeInList(config.statuses, name, position), 'config');
-    await writeConfig(dirname(this.#file), { ...config, statuses });
-    return statuses;
-  }
-
-  async removeStatus(name: string, moveTo?: string): Promise<string[]> {
-    const { tasks, config } = await this.#read();
-    requireStatus(config.statuses, name);
-
-    const statuses = checkStatusList(
-      config.statuses.filter((status) => status !== name),
-      'config',
-    );
-
-    const inColumn = tasks.filter((task) => task.status === name).sort(byRank);
-    if (inColumn.length > 0 && moveTo === undefined) {
-      throw new ConfigError(
-        `'${name}' still holds ${inColumn.length} task${inColumn.length === 1 ? '' : 's'}. ` +
-          `Pass where they should go, e.g. --move-to=${statuses[0]}.`,
-      );
-    }
-
-    if (inColumn.length === 0) {
-      // Nothing to move: only the config changes. Every remaining task still names a
-      // listed column, so the store file does not need rewriting.
-      await writeConfig(dirname(this.#file), { ...config, statuses });
-      return statuses;
-    }
-
-    if (!statuses.includes(moveTo!)) {
-      throw new ConfigError(
-        `Cannot move tasks to '${moveTo}': it is not a status here. Use one of: ${statuses.join(', ')}.`,
-      );
-    }
-
-    // Fresh ranks at the end of the destination, in the tasks' current order — carrying
-    // the old ranks across would interleave them wrongly with what is already there.
-    let last =
-      tasks
-        .filter((task) => task.status === moveTo)
-        .sort(byRank)
-        .at(-1)?.rank ?? null;
-    const reranked = new Map<string, string>();
-    for (const task of inColumn) {
-      last = rankBetween(last, null);
-      reranked.set(task.id, last);
-    }
-
-    await writeConfig(dirname(this.#file), { ...config, statuses });
-    await writeTasks(
-      this.#file,
-      tasks.map((task) =>
-        task.status === name ? { ...task, status: moveTo!, rank: reranked.get(task.id)! } : task,
-      ),
-      config.prefix,
-      statuses,
-    );
-    return statuses;
   }
 
   #require(tasks: readonly Task[], id: string): Task {
@@ -391,33 +296,6 @@ async function readRawLines(file: string): Promise<RawLine[]> {
   }
 
   return lines;
-}
-
-/** Throws a listing error when `name` is not one of the project's statuses. */
-function requireStatus(statuses: readonly string[], name: string): void {
-  if (!statuses.includes(name)) {
-    throw new ConfigError(`'${name}' is not a status here. Use one of: ${statuses.join(', ')}.`);
-  }
-}
-
-/**
- * Returns `list` with `name` placed at `position` — after or before a named neighbour,
- * or at the end when neither is given. `name` is removed first, so this both inserts a
- * new status and reorders an existing one. A named neighbour that is not present is an
- * error rather than a silent append, since the caller was pointing at something.
- */
-function placeInList(list: readonly string[], name: string, position?: StatusPosition): string[] {
-  const without = list.filter((status) => status !== name);
-
-  const anchor = position?.after ?? position?.before;
-  if (anchor === undefined) return [...without, name];
-
-  const index = without.indexOf(anchor);
-  if (index < 0) {
-    throw new ConfigError(`'${anchor}' is not a status here. Use one of: ${without.join(', ')}.`);
-  }
-  const at = position?.after !== undefined ? index + 1 : index;
-  return [...without.slice(0, at), name, ...without.slice(at)];
 }
 
 function looksLegacy(parsed: unknown): boolean {

@@ -170,8 +170,8 @@ here. The argument for it is in the linked ADR.
     from the write path; a future `TaskStore` implementation calls the same module. This
     covers a rule that has to answer a question over the whole set — existence, a cycle — not
     a mechanical rewrite that a write already in progress makes necessary, such as `remove`
-    dropping a deleted id from every `blockedBy` or `renameStatus` rewriting a status name;
-    those stay inline, beside the write that triggers them.
+    dropping a deleted id from every `blockedBy`; that stays inline, beside the write that
+    triggers it.
     ([ADR 0021](docs/adr/0021-whole-store-rules-live-in-core.md),
     [0022](docs/adr/0022-mechanical-rewrites-stay-with-their-write.md))
 

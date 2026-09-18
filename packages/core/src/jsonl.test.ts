@@ -381,8 +381,8 @@ describe('removing', () => {
     await new Promise((resolve) => setTimeout(resolve, 2));
     await store.remove(a.id);
 
-    // Same precedent as renameStatus: a task rewritten as the side effect of someone
-    // else's write did not itself change, so its `updated` timestamp does not move.
+    // A task rewritten as the side effect of someone else's write did not itself
+    // change, so its `updated` timestamp does not move.
     assert.equal((await store.get(b.id))!.updated, b.updated);
   });
 });
@@ -543,101 +543,6 @@ describe('status management', () => {
   it('lists the configured statuses', async () => {
     await store.create(draft('X'));
     assert.deepEqual(await store.listStatuses(), [...DEFAULT_STATUSES]);
-  });
-
-  it('adds a status at the end, or after/before a named one', async () => {
-    await store.create(draft('X'));
-    assert.deepEqual(await store.addStatus('review'), [
-      'backlog',
-      'priority',
-      'in-progress',
-      'done',
-      'review',
-    ]);
-    assert.deepEqual(await store.addStatus('triage', { before: 'backlog' }), [
-      'triage',
-      'backlog',
-      'priority',
-      'in-progress',
-      'done',
-      'review',
-    ]);
-    assert.deepEqual(await store.addStatus('blocked', { after: 'priority' }), [
-      'triage',
-      'backlog',
-      'priority',
-      'blocked',
-      'in-progress',
-      'done',
-      'review',
-    ]);
-  });
-
-  it('refuses a duplicate name and an unknown neighbour', async () => {
-    await store.create(draft('X'));
-    await assert.rejects(store.addStatus('backlog'), /already exists/);
-    await assert.rejects(store.addStatus('review', { after: 'nope' }), /not a status/);
-  });
-
-  it('renames a status and rewrites its tasks in the same store', async () => {
-    const task = await store.create(draft('X', { status: 'priority' }));
-    assert.deepEqual(await store.renameStatus('priority', 'next-up'), [
-      'backlog',
-      'next-up',
-      'in-progress',
-      'done',
-    ]);
-    assert.equal((await store.get(task.id))!.status, 'next-up');
-  });
-
-  it('refuses to rename onto an existing status, or from an unknown one', async () => {
-    await store.create(draft('X'));
-    await assert.rejects(store.renameStatus('priority', 'done'), /more than once/);
-    await assert.rejects(store.renameStatus('nope', 'x'), /not a status/);
-  });
-
-  it('reorders an existing status', async () => {
-    await store.create(draft('X'));
-    assert.deepEqual(await store.reorderStatus('done', { before: 'backlog' }), [
-      'done',
-      'backlog',
-      'priority',
-      'in-progress',
-    ]);
-  });
-
-  it('removes an empty status without touching tasks', async () => {
-    const task = await store.create(draft('X', { status: 'backlog' }));
-    assert.deepEqual(await store.removeStatus('done'), ['backlog', 'priority', 'in-progress']);
-    assert.equal((await store.get(task.id))!.status, 'backlog');
-  });
-
-  it('refuses to remove a non-empty status without a destination', async () => {
-    await store.create(draft('X', { status: 'priority' }));
-    await assert.rejects(store.removeStatus('priority'), /still holds 1 task/);
-  });
-
-  it('moves a removed status’s tasks to the destination with fresh ranks', async () => {
-    const a = await store.create(draft('A', { status: 'priority' }));
-    const b = await store.create(draft('B', { status: 'priority' }));
-    await store.create(draft('C', { status: 'done' }));
-
-    const statuses = await store.removeStatus('priority', 'done');
-    assert.ok(!statuses.includes('priority'));
-
-    const done = (await store.list()).filter((t) => t.status === 'done');
-    assert.deepEqual(
-      done.map((t) => t.id).sort(),
-      [a.id, b.id, done.find((t) => t.title === 'C')!.id].sort(),
-    );
-    // The moved tasks land after C, in their original order, with no rank collisions.
-    const ranks = done.map((t) => t.rank);
-    assert.equal(new Set(ranks).size, ranks.length);
-  });
-
-  it('refuses to remove the last status', async () => {
-    await writeConfig(dir, { prefix: 'task', nextId: 1, statuses: ['only'] });
-    await assert.rejects(store.removeStatus('only'), /at least one column/);
   });
 });
 

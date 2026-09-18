@@ -7,9 +7,11 @@ store — the same precondition [ADR 0021](0021-whole-store-rules-live-in-core.m
 the store... lives in its own module... never inside the JSONL store."
 
 Read literally, boundary 12 would move the drop into `prerequisites.ts` too. But `jsonl.ts`
-already contains exactly this shape of thing: `renameStatus` rewrites every task carrying the
-old status name, in the same write, for the same reason — and it predates boundary 12 without
-being in tension with it. The two cases needed telling apart.
+already contained exactly this shape of thing: `renameStatus` rewrote every task carrying the
+old status name, in the same write, for the same reason — and it predated boundary 12 without
+being in tension with it. The two cases needed telling apart. (`renameStatus` itself was
+deleted in tt-27, once nothing outside the store could reach it; the pattern it illustrated
+lives on in `remove`.)
 
 The difference is whether there is a question to answer. `checkPrerequisites` and its cycle
 search are an algorithm: given the whole set, decide yes or no, and a SQLite `TaskStore` would
@@ -18,18 +20,18 @@ Dropping a pointer decides nothing — the id is gone, so every list that named 
 entry. Any store expresses that natively: `array.filter` here, `UPDATE ... SET blockedBy =
 array_remove(blockedBy, ?)` in SQL. There is no logic for a shared module to hold, only a
 storage-native bulk update sitting next to the write that made it necessary — which is what
-`renameStatus` already does for `status`, and what `remove` now does for `blockedBy`.
+`renameStatus` used to do for `status`, and what `remove` does for `blockedBy`.
 
 A whole-store operation goes in its own module, per boundary 12, when it has to answer a
 question that could be gotten wrong — existence, a cycle, anything needing real reasoning over
 the set. A mechanical rewrite that follows automatically from a value disappearing — a rename,
 a delete — stays inline in the store implementation, beside the write that triggers it, the way
-`renameStatus` already does.
+`renameStatus` used to.
 
 ## Consequences
 
 - `remove` in `jsonl.ts` rewrites `blockedBy` on every task in the same `map` it uses to filter
-  out the deleted task, matching `renameStatus`'s shape for `status`.
+  out the deleted task, matching the shape `renameStatus` used to have for `status`.
 - Boundary 12 in AGENTS.md is narrowed by this ADR, not reversed: it covers a rule that must
   answer a question using every task, not a bulk rewrite that a write already in progress makes
   necessary.
