@@ -252,8 +252,7 @@ export function parseTask(input: unknown, where: string, prefix: string | undefi
 
 /**
  * Parses and normalises a new task's fields. The store allocates id, rank and timestamps.
- * An absent status defaults to the first of the four columns — a new task lands in
- * `backlog`.
+ * An absent status defaults to the first column — a new task lands in `backlog`.
  */
 export function parseDraft(input: unknown, where = 'new task'): TaskDraft {
   const record = asRecord(input, where);

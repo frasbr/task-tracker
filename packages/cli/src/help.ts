@@ -20,13 +20,13 @@ commands
   move <id> <status>         change column, optionally repositioning
   note <id> <text>           append to a task's notes
   remove <id>                delete a task
-  status <sub>               list or change the project's columns
+  status <sub>               list the possible statuses
   migrate-ids                convert a pre-prefix store's task IDs
 
 statuses
-  Per-project, held in .tasks/config.json. Run \`tasks status list\` to see them;
-  a fresh project starts with backlog · priority · in-progress · done. Change them
-  with \`tasks status add|rename|reorder|remove\`.
+  Five columns which represent task lifecycle state:
+  backlog · priority · in-progress · in-review · done.
+  Run \`tasks status list\` to see them. These are fixed.
 
 task IDs
   <prefix>-<n>, e.g. task-tracker-7. The bare number is shorthand: \`tasks show 7\`
@@ -145,12 +145,10 @@ export const COMMAND_HELP: Readonly<Record<string, string>> = {
 
   status: `tasks status — list the columns
 
-  Four columns, fixed, left to right on the board: backlog, priority, in-progress, done.
-  They are the schema rather than a per-project setting, so there is nothing to add,
-  rename, reorder or remove. Only done carries meaning for the tool — a prerequisite
-  anywhere else is unfinished, which is what makes a card read as blocked.
+  Five columns, fixed, left to right on the board: backlog, priority, in-progress,
+  in-review, done.
 
-  list                       print the four in board order (--json for an array)
+  list                       print the five in board order (--json for an array)
 
   tasks status list`,
 

@@ -493,7 +493,7 @@ async function remove(
 }
 
 /**
- * `tasks status` — read the columns. There is nothing to write: the four are the schema,
+ * `tasks status` — read the columns. There is nothing to write: the five are the schema,
  * not a setting.
  *
  * The four mutating subcommands are answered by name rather than falling through to the
@@ -518,7 +518,7 @@ async function status(args: ParsedArgs, io: Io, store: TaskStore): Promise<numbe
     case 'remove':
       throw new UsageError(
         `status ${sub}: the columns are fixed and cannot be changed. ` +
-          'They are backlog, priority, in-progress and done, in that order, and they are ' +
+          `They are ${STATUSES.join(', ')}, in that order, and they are ` +
           'part of the schema rather than a per-project setting. Use `tasks status list` ' +
           'to read them.',
       );

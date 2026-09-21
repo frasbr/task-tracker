@@ -12,7 +12,7 @@ import { STATUSES } from './task.ts';
  *
  * It used to also hold the project's status list, back when the columns were
  * per-project (ADR 0019). docs/plans/0003-four-static-columns.md reversed that: the
- * four columns are the schema now, fixed in `task.ts`, and a config is not asked.
+ * columns are the schema now, fixed in `task.ts`, and a config is not asked.
  */
 
 export interface ProjectConfig {
@@ -58,27 +58,25 @@ export function checkPrefix(prefix: string): void {
 }
 
 /**
- * A config may still carry a `statuses` key from before the four columns were fixed
- * (ADR 0019, reversed by docs/plans/0003-four-static-columns.md). A key naming exactly
- * the four is accepted and ignored — every config that predates this change is exactly
- * that case, so nothing has to be rewritten on read. Anything else is a hard error:
- * silently dropping it would strand whatever tasks sit in a column it lists that is not
- * one of the four.
+ * A config may still carry a `statuses` key from before the columns were fixed (ADR
+ * 0019, reversed by docs/plans/0003-four-static-columns.md). A key naming any subset of
+ * the fixed columns is accepted and ignored — every config that predates this change is
+ * exactly that case (the original four, a subset of today's five), so nothing has to be
+ * rewritten on read. Anything naming a column outside the fixed set is a hard error:
+ * silently dropping it would strand whatever tasks sit in a column that does not exist.
  */
 function checkLegacyStatuses(value: unknown, where: string): void {
   if (value === undefined) return;
 
   const fixed = new Set<string>(STATUSES);
   const matches =
-    Array.isArray(value) &&
-    value.length === STATUSES.length &&
-    value.every((entry) => typeof entry === 'string' && fixed.has(entry));
+    Array.isArray(value) && value.every((entry) => typeof entry === 'string' && fixed.has(entry));
   if (matches) return;
 
   throw new ConfigError(
-    `${where}: 'statuses' is ${JSON.stringify(value)}. The four columns are fixed now — ` +
+    `${where}: 'statuses' is ${JSON.stringify(value)}. The columns are fixed now — ` +
       `${STATUSES.join(', ')} — and this key is no longer read. Move any tasks sitting in ` +
-      `a column that is not one of the four, then delete 'statuses' from config.json.`,
+      `a column that is not one of those, then delete 'statuses' from config.json.`,
   );
 }
 

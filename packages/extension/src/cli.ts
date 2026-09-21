@@ -41,7 +41,7 @@ export async function listTasks(directory: string): Promise<CliResult<BoardTask[
 }
 
 /**
- * The four columns in board order, from `tasks status list --json`. Read-only: the columns
+ * The fixed columns in board order, from `tasks status list --json`. Read-only: the columns
  * are the schema, so there is nothing here that writes one.
  */
 export async function listStatuses(directory: string): Promise<CliResult<string[]>> {

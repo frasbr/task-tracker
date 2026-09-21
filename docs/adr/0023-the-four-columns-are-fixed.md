@@ -1,3 +1,7 @@
+> Amended by [ADR 0024](0024-in-review-joins-the-fixed-columns.md): the set gained a fifth name,
+> `in-review`. The reasoning below — that the columns are fixed rather than per-project — still
+> holds.
+
 # The four columns are fixed, not per-project
 
 This reverses [ADR 0019](0019-statuses-are-per-project.md). `backlog`, `priority`, `in-progress`

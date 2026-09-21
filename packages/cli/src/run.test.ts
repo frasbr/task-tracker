@@ -323,7 +323,7 @@ describe('list', () => {
     await seed();
     const result = await tasks('list', '--status=blocked');
     assert.equal(result.code, EXIT_USAGE);
-    assert.match(result.err, /backlog, priority, in-progress, done/);
+    assert.match(result.err, /backlog, priority, in-progress, in-review, done/);
   });
 
   it('takes flags, not arguments', async () => {
@@ -778,7 +778,7 @@ describe('the shell contract', () => {
 });
 
 describe('status', () => {
-  it('lists the four statuses, and as JSON', async () => {
+  it('lists the fixed statuses, and as JSON', async () => {
     await ok('init');
     assert.equal((await ok('status', 'list')).out, STATUSES.join('\n'));
     assert.deepEqual(await json<string[]>('status', 'list'), [...STATUSES]);

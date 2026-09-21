@@ -29,13 +29,14 @@ import { TASK_SCHEME, idOf, taskUri } from './task-document.ts';
 export const TASKS_VIEW_ID = 'taskTracker.tasks';
 
 /**
- * Icons for the four default columns, kept because they read well; any other status
+ * Icons for the five default columns, kept because they read well; any other status
  * falls back to a neutral one rather than guessing an icon from its name.
  */
 const STATUS_ICONS: Record<string, string> = {
   backlog: 'circle-outline',
   priority: 'arrow-up',
   'in-progress': 'play-circle',
+  'in-review': 'eye',
   done: 'pass-filled',
 };
 
@@ -105,9 +106,11 @@ export class TasksTreeProvider implements vscode.TreeDataProvider<Node> {
     if (tasks.length === 0) return [];
 
     // Every column, even empty ones: a list whose shape changes under you is harder to
-    // navigate than one with a quiet "0" in it. Open the middle groups and close the
-    // ends — for the default four that is priority and in-progress, as before, and it
-    // needs no per-name configuration for any other set.
+    // navigate than one with a quiet "0" in it. Open every column except the first and
+    // last — backlog stays collapsed as the (often long) intake pile, done stays
+    // collapsed as the archive, and everything actively being worked sits open. For the
+    // five fixed columns that expands priority, in-progress and in-review; it needs no
+    // per-name configuration for any other set.
     return statuses.map((status, index) => ({
       kind: 'column',
       status,

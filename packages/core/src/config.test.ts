@@ -66,7 +66,7 @@ describe('readConfig / writeConfig', () => {
     await assert.rejects(writeConfig(dir, { prefix: 'foo-2', nextId: 1 }), ConfigError);
   });
 
-  it('accepts and ignores a legacy statuses key naming exactly the four columns', async () => {
+  it('accepts and ignores a legacy statuses key naming a subset of the fixed columns', async () => {
     await writeFile(
       join(dir, 'config.json'),
       JSON.stringify({
@@ -78,7 +78,15 @@ describe('readConfig / writeConfig', () => {
     assert.deepEqual(await readConfig(dir), { prefix: 'demo', nextId: 1 });
   });
 
-  it('rejects a legacy statuses key naming anything other than the four columns', async () => {
+  it('accepts and ignores a legacy statuses key naming a smaller subset of the fixed columns', async () => {
+    await writeFile(
+      join(dir, 'config.json'),
+      JSON.stringify({ prefix: 'demo', nextId: 1, statuses: ['backlog', 'priority'] }),
+    );
+    assert.deepEqual(await readConfig(dir), { prefix: 'demo', nextId: 1 });
+  });
+
+  it('rejects a legacy statuses key naming anything outside the fixed columns', async () => {
     await writeFile(
       join(dir, 'config.json'),
       JSON.stringify({ prefix: 'demo', nextId: 1, statuses: ['todo', 'doing', 'done'] }),
@@ -86,7 +94,7 @@ describe('readConfig / writeConfig', () => {
     await assert.rejects(readConfig(dir), (error: unknown) => {
       assert.ok(error instanceof ConfigError);
       assert.match(error.message, /'statuses' is/);
-      assert.match(error.message, /backlog, priority, in-progress, done/);
+      assert.match(error.message, /backlog, priority, in-progress, in-review, done/);
       return true;
     });
   });

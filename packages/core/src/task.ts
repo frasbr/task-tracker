@@ -6,11 +6,13 @@
  */
 
 /**
- * The four columns, fixed. Order here is the left-to-right order on the board and
+ * The five columns, fixed. Order here is the left-to-right order on the board and
  * top-to-bottom in the sidebar. See docs/plans/0003-four-static-columns.md, which
- * reverses ADR 0019's per-project configurability.
+ * reverses ADR 0019's per-project configurability, and
+ * docs/plans/0004-in-review-column.md, which adds `in-review` between `in-progress`
+ * and `done`.
  */
-export const STATUSES = ['backlog', 'priority', 'in-progress', 'done'] as const;
+export const STATUSES = ['backlog', 'priority', 'in-progress', 'in-review', 'done'] as const;
 
 /**
  * A column name. Fixed at compile time, off `STATUSES`. Use `isTaskStatus(value)` to
@@ -54,7 +56,7 @@ export interface Task {
   blockedBy: string[];
 }
 
-/** True when `value` is one of the four statuses. */
+/** True when `value` is one of the fixed statuses. */
 export function isTaskStatus(value: unknown): value is TaskStatus {
   return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);
 }

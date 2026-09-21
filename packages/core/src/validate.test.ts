@@ -47,7 +47,7 @@ describe('parseTask', () => {
   it('rejects an invalid status and lists the valid ones', () => {
     assert.throws(
       () => parseTask({ ...VALID, status: 'blocked' }, 'test', 'task-tracker'),
-      /backlog, priority, in-progress, done/,
+      /backlog, priority, in-progress, in-review, done/,
     );
   });
 

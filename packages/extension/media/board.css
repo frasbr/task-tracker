@@ -273,6 +273,9 @@ body {
 .column-in-progress .card {
   --column-accent: var(--vscode-charts-blue, var(--vscode-textLink-foreground));
 }
+.column-in-review .card {
+  --column-accent: var(--vscode-charts-purple, var(--vscode-symbolIcon-classForeground));
+}
 .column-done .card {
   --column-accent: var(--vscode-charts-green, var(--vscode-testing-iconPassed));
 }

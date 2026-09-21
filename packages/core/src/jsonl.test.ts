@@ -502,7 +502,7 @@ describe('project config', () => {
     await assert.rejects(store.list(), /not a valid task ID/);
   });
 
-  it('rejects a task status outside the four fixed columns', async () => {
+  it('rejects a task status outside the fixed columns', async () => {
     const task = await store.create(draft('X', { status: 'backlog' }));
     await writeFile(file, `${JSON.stringify({ ...task, status: 'triage' })}\n`);
 
