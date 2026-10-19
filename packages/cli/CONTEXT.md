@@ -46,8 +46,9 @@ _Avoid_: resolution, lookup, root finding
 
 **Agent skill**:
 Instructions that teach an agent to use this CLI, compiled into the binary and installed to the
-user's home directory by `tasks init`. Teaches using the tool, not building it. There are two:
-`tasks` for the board, `plans` for the documents its work is cut from.
+user's home directory by `tasks init`. Teaches using the tool, not building it. There are four,
+in two pairs: `tasks` and `plans` for the interface — the board, and the documents its work is
+cut from — and `implement-task` and `implement-batch` for the workflow run on top of it.
 _Avoid_: prompt, plugin, docs, instructions
 
 **Init**:
@@ -61,6 +62,12 @@ A numbered document under `docs/plans/` holding the argument behind a piece of w
 problem, the spec, what is out of scope, and the order the steps go in. Holds no progress — a
 task's `refs` point back at its plan, and the board is what says where the work has got to.
 _Avoid_: spec (a section inside a plan, not the whole thing), design doc, roadmap
+
+**Workflow skill**:
+An agent skill that teaches how work moves rather than what the CLI does: `implement-task` for
+one task, `implement-batch` for a nominated batch dispatched to subagents. Opinionated where an
+interface skill is descriptive, and shipped anyway (ADR 0025).
+_Avoid_: process skill, orchestration skill
 
 **Plan template**:
 The `TEMPLATE.md` that `init` writes into `docs/plans/`. A starting point a project is meant to

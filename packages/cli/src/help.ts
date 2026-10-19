@@ -49,15 +49,17 @@ export const COMMAND_HELP: Readonly<Record<string, string>> = {
   Creates docs/plans/ too, with a template in it. A plan holds the reasoning behind a
   piece of work; the board holds its state. A task points back at its plan through refs.
 
-  Also installs two agent skills to ~/.claude/skills/ the first time it runs: 'tasks',
-  so agents in every project know these commands exist, and 'plans', which teaches
-  them to write the documents the work is cut from. That is the one thing this
-  command writes outside the project, and it says so when it does.
+  Also installs four agent skills to ~/.claude/skills/ the first time it runs. Two
+  teach the interface: 'tasks', so agents in every project know these commands exist,
+  and 'plans', which teaches them to write the documents the work is cut from. Two
+  teach the workflow: 'implement-task' takes one task end to end, and
+  'implement-batch' orchestrates a batch of them across subagents. That is the one
+  thing this command writes outside the project, and it says so when it does.
 
   --prefix=<name>, -p <name>  the task ID prefix, e.g. \`tt\` for ids like tt-7.
                              Defaults to the repository's own name. Set once, here —
                              changing it afterwards needs \`tasks migrate-ids\`.
-  --skip-skill               leave ~/.claude/skills alone (both skills)
+  --skip-skill               leave ~/.claude/skills alone (every skill)
   --skip-plans               leave docs/plans/ alone
 
   tasks init

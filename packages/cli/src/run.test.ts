@@ -84,12 +84,19 @@ describe('init', () => {
     assert.match(result.out, /Created .*\.tasks/);
   });
 
-  it('installs both agent skills, and says it wrote outside the project', async () => {
+  it('installs every agent skill, and says it wrote outside the project', async () => {
     const result = await ok('init');
-    assert.match(result.out, /Installed the agent skills in .*: tasks, plans/);
+    assert.match(
+      result.out,
+      /Installed the agent skills in .*: tasks, plans, implement-task, implement-batch/,
+    );
     assert.match(result.out, /outside this project/);
     assert.match(await readFile(join(skills, 'tasks', 'SKILL.md'), 'utf8'), /^---\nname: tasks\n/);
     assert.match(await readFile(join(skills, 'plans', 'SKILL.md'), 'utf8'), /^---\nname: plans\n/);
+    assert.match(
+      await readFile(join(skills, 'implement-batch', 'SKILL.md'), 'utf8'),
+      /^---\nname: implement-batch\n/,
+    );
   });
 
   it('leaves the skills alone with --skip-skill', async () => {
@@ -97,6 +104,7 @@ describe('init', () => {
     assert.doesNotMatch(result.out, /skill/);
     await assert.rejects(readFile(join(skills, 'tasks', 'SKILL.md'), 'utf8'));
     await assert.rejects(readFile(join(skills, 'plans', 'SKILL.md'), 'utf8'));
+    await assert.rejects(readFile(join(skills, 'implement-batch', 'SKILL.md'), 'utf8'));
   });
 
   it('does not mention the skill again once it is current', async () => {

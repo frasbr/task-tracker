@@ -71,10 +71,12 @@ When adding to or updating this map:
   `install-extension` builds, packages and installs the board (`--status` / `--uninstall` /
   `--dev`, and `VSCODE_EXTENSIONS_DIR` redirects it, which is how it is tested safely).
   `npm run install-all` runs both.
-- **`.claude/skills/tasks/`** and **`.claude/skills/plans/`** — the two skills that teach agents
-  to _use_ the tool, not to build it. `tasks` covers the board, `plans` covers writing the
-  documents its work is cut from. Both are compiled into the `tasks` binary and installed by
-  `tasks init`. Boundary 10.
+- **`.claude/skills/`** — the skills that teach agents to _use_ the tool, not to build it. Two
+  cover the interface: `tasks/` the board, `plans/` the documents its work is cut from. Two cover
+  the workflow: `implement-task/` one task end to end, `implement-batch/` a nominated batch of
+  them across subagents. All four are compiled into the `tasks` binary and installed by
+  `tasks init`, so none of them may name this repository or assume its layout. Anything else in
+  here is local to this repo and ships nowhere. Boundaries 10 and 13.
 - **`.tasks/`** — this repo's own board, kept by the tool itself.
 - **`docs/adr/`** — why the architecture is the shape it is. Numbered, short, and appended to
   rather than rewritten.
@@ -152,12 +154,14 @@ here. The argument for it is in the linked ADR.
    MODULE_TYPELESS_PACKAGE_JSON warning from `node --test` is the correct trade and must not be
    silenced that way. ([ADR 0005](docs/adr/0005-the-extension-bundle-stays-commonjs.md))
 
-10. **`.claude/skills/tasks/` and `.claude/skills/plans/` are the master copies of the agent
-    skills.** Edit them there, never in `~/.claude/skills` — an edit made in the installed
-    location is silently overwritten on the next install. Adding a third means adding it to the
-    `SKILLS` list in `skill.ts`; nothing discovers them from disk.
+10. **The four shipped skills under `.claude/skills/` are the master copies.** `tasks`, `plans`,
+    `implement-task` and `implement-batch`. Edit them there, never in `~/.claude/skills` — an
+    edit made in the installed location is silently overwritten on the next install. Shipping
+    another means adding it to the `SKILLS` list in `skill.ts`; nothing discovers them from
+    disk, and a skill absent from that list is local to this repo.
     ([ADR 0017](docs/adr/0017-the-agent-skill-ships-inside-the-binary.md),
-    [0018](docs/adr/0018-plans-live-in-a-numbered-directory.md))
+    [0018](docs/adr/0018-plans-live-in-a-numbered-directory.md),
+    [0025](docs/adr/0025-the-workflow-skills-ship-too.md))
 
 11. **A plan holds the reasoning, the board holds the state.** No task checklists and no
     progress in `docs/plans/`; no reasoning that lives only in a task. The two are joined by
@@ -174,6 +178,13 @@ here. The argument for it is in the linked ADR.
     triggers it.
     ([ADR 0021](docs/adr/0021-whole-store-rules-live-in-core.md),
     [0022](docs/adr/0022-mechanical-rewrites-stay-with-their-write.md))
+
+13. **A shipped skill must not instruct an agent to run this repository's commands or assume
+    its layout.** It is installed into every project `tasks init` touches, so it finds the check
+    command, the agent guide and the glossary the way an agent would, rather than naming
+    `npm run check` or a path under `packages/`. An illustrative example carrying a path or an
+    id prefix is fine; an instruction that only works here is not.
+    ([ADR 0025](docs/adr/0025-the-workflow-skills-ship-too.md))
 
 ---
 
@@ -199,6 +210,8 @@ data-model decisions that have no boundary to enforce them.
   0019
 - [0024](docs/adr/0024-in-review-joins-the-fixed-columns.md) `in-review` joins the fixed columns,
   amending 0023
+- [0025](docs/adr/0025-the-workflow-skills-ship-too.md) the workflow skills ship in the binary
+  too, extending 0017
 
 Start at [0001](docs/adr/0001-tasks-are-local-working-memory.md). Tasks are one person's local
 working memory, and every other decision assumes it.
@@ -239,8 +252,10 @@ A change is done when all of the following are true. Do not report completion ot
    was updated in the same change. A stale glossary is worse than no glossary.
 6. If the CLI's interface changed, `.claude/skills/tasks/SKILL.md` was updated to match, and
    `.claude/skills/plans/SKILL.md` too where the change touches plans. Those files are the
-   contract agents rely on; they drift apart from the CLI the moment you forget. Both are
-   compiled into the binary, so a stale skill ships to every project the user initialises.
+   contract agents rely on; they drift apart from the CLI the moment you forget. If the task
+   lifecycle changed — a column, a review gate, what closes a task — `implement-task` and
+   `implement-batch` were updated too. All four are compiled into the binary, so a stale skill
+   ships to every project the user initialises.
 
 ## Deliberately not built
 

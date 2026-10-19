@@ -33,13 +33,15 @@ describe('skillsHome', () => {
 });
 
 describe('installSkills', () => {
-  it('writes both skills on a first run', async () => {
+  it('writes every skill on a first run', async () => {
     const outcomes = await installSkills(env);
     assert.deepEqual(
       outcomes.map((outcome) => [outcome.name, outcome.kind]),
       [
         ['tasks', 'installed'],
         ['plans', 'installed'],
+        ['implement-task', 'installed'],
+        ['implement-batch', 'installed'],
       ],
     );
 
@@ -50,12 +52,20 @@ describe('installSkills', () => {
     const plans = await readFile(skillPath('plans', env), 'utf8');
     assert.match(plans, /^---\nname: plans\n/, 'must carry the skill frontmatter');
     assert.match(plans, /docs\/plans/, 'must say where plans live');
+
+    const task = await readFile(skillPath('implement-task', env), 'utf8');
+    assert.match(task, /^---\nname: implement-task\n/, 'must carry the skill frontmatter');
+
+    const batch = await readFile(skillPath('implement-batch', env), 'utf8');
+    assert.match(batch, /^---\nname: implement-batch\n/, 'must carry the skill frontmatter');
+    // The orchestrator dispatches the other skill by name; a rename there breaks it silently.
+    assert.match(batch, /implement-task/, 'must name the skill it dispatches');
   });
 
   it('is embedded in the binary, not read from a checkout', async () => {
     // Nothing in the source tree is consulted: the only paths touched are the targets.
     await installSkills(env);
-    for (const name of ['tasks', 'plans']) {
+    for (const name of ['tasks', 'plans', 'implement-task', 'implement-batch']) {
       const written = await readFile(skillPath(name, env), 'utf8');
       assert.ok(written.length > 1000, `${name} should be substantial, not a stub`);
     }
@@ -66,7 +76,7 @@ describe('installSkills', () => {
     const outcomes = await installSkills(env);
     assert.deepEqual(
       outcomes.map((outcome) => outcome.kind),
-      ['current', 'current'],
+      ['current', 'current', 'current', 'current'],
     );
   });
 

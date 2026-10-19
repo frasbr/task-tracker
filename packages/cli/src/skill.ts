@@ -1,6 +1,8 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import IMPLEMENT_BATCH_MARKDOWN from '../../../.claude/skills/implement-batch/SKILL.md';
+import IMPLEMENT_TASK_MARKDOWN from '../../../.claude/skills/implement-task/SKILL.md';
 import PLANS_MARKDOWN from '../../../.claude/skills/plans/SKILL.md';
 import TASKS_MARKDOWN from '../../../.claude/skills/tasks/SKILL.md';
 
@@ -14,9 +16,15 @@ import TASKS_MARKDOWN from '../../../.claude/skills/tasks/SKILL.md';
  * globally. A per-project copy would go stale in every project the moment the CLI
  * changed.
  *
- * There are two. `tasks` teaches the board, `plans` teaches the documents the board's
- * work is cut from — the half of the workflow that would otherwise have to be copied
- * into each project by hand.
+ * There are four, in two pairs. `tasks` and `plans` teach the interface: the board, and
+ * the documents its work is cut from. `implement-task` and `implement-batch` teach the
+ * workflow that runs on top of it — one task end to end, and a nominated batch of them
+ * dispatched to subagents. The second pair is opinionated in a way the first is not, and
+ * ships anyway because a workflow copied into each project by hand is a workflow that
+ * drifts (ADR 0025).
+ *
+ * Order matters: `implement-batch` tells its implementer to use `implement-task`, so
+ * nothing installs the orchestrator without the thing it dispatches.
  */
 
 /** Name is the directory under the skills home, and the name in the file's frontmatter. */
@@ -28,6 +36,8 @@ interface AgentSkill {
 const SKILLS: readonly AgentSkill[] = [
   { name: 'tasks', markdown: TASKS_MARKDOWN },
   { name: 'plans', markdown: PLANS_MARKDOWN },
+  { name: 'implement-task', markdown: IMPLEMENT_TASK_MARKDOWN },
+  { name: 'implement-batch', markdown: IMPLEMENT_BATCH_MARKDOWN },
 ];
 
 export type SkillOutcome =
